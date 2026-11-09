@@ -1,0 +1,34 @@
+name: Lint
+
+on:
+  pull_request:
+  merge_group:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.3.3 
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Install Python dependencies
+        run: uv sync --locked
+
+      - name: Lint Python with Ruff
+        run: uvx ruff@0.17.3 check --no-fix .
+
+      - name: Lint with Biome
+        run: uv run pre-commit run biome-lint --all-files
