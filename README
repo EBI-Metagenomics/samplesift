@@ -1,6 +1,6 @@
 # Samplesift
 
-Samplesift is a Python package for building reusable data projections and their
+Samplesift is a Python package for building reusable data collections and their
 integrations.
 
 ## Installation
@@ -25,6 +25,66 @@ INSTALLED_APPS = [
     "samplesift.django.apps.SamplesiftDjangoConfig",
 ]
 ```
+
+## Django collections
+
+SampleSift writes derived collection tables to the `samplesift` database alias
+(or the alias in `SAMPLESIFT_DATABASE_ALIAS`). The target must use Django's
+PostGIS backend. For local development, start it with:
+
+```shell
+docker compose up -d postgis
+```
+
+Then configure the alias and create registered collection tables:
+
+```python
+DATABASES["samplesift"] = {
+    "ENGINE": "django.contrib.gis.db.backends.postgis",
+    "NAME": "samplesift",
+    "USER": "samplesift",
+    "PASSWORD": "samplesift",
+    "HOST": "127.0.0.1",
+    "PORT": "55432",
+}
+```
+
+```shell
+python manage.py samplesift_sync_schema
+```
+
+Declare collections in an installed app's `samplesift.py`; they are discovered
+when Django starts:
+
+```python
+from django.db import models
+from samplesift.django import Point, SampleSiftCollection, registry
+
+from .models import Sample
+
+
+@registry.register
+class SampleCollection(SampleSiftCollection):
+    fields = ["lat", "lon", "temperature", "species_name"]
+    geometry = Point(longitude="lon", latitude="lat")
+
+    class Meta:
+        model = Sample
+        database = "default"  # optional
+        # Optional: defaults to "sample" from the source model class name.
+        api_name = "samples"
+
+    class Query:
+        default_ordering = ["-temperature"]
+```
+
+Saves and deletes through Django's ORM are materialised after the source transaction
+commits. Bulk updates, raw SQL, and changes to related objects do not sync in this
+initial implementation.
+
+Registered spatial collections can be exposed with the ready-made Django Ninja
+API. See [Django collections](docs/django-collections.md#spatial-query-api) for
+mounting, the two `QUERY` endpoints, pagination, and map-client integration.
 
 ## Repository layout
 
