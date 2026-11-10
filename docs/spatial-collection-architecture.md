@@ -182,7 +182,7 @@ generates OpenAPI 3.2.1 operations and components for each collection. See
 
 Geometry is declared as a WGS84 point copied from a source point or constructed
 from longitude/latitude. The result endpoint deliberately returns individual
-rows without a spatial bound, while the tile endpoint applies fixed screen-space clustering through a
+rows without a spatial bound, while the tile endpoint applies distance-based screen-space clustering through a
 documented maximum zoom. Map clients must use a custom `QUERY` tile adapter,
 because stock tile URL sources issue `GET` requests only.
 

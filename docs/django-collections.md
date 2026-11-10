@@ -179,8 +179,14 @@ Each API collection has discovery and two static `QUERY` endpoints:
 
 - `GET /samplesift/collections/{api_name}/queryables` returns a JSON Schema document
   describing public queryables and their supported operators.
-- `QUERY /samplesift/collections/{api_name}/tiles/{z}/{x}/{y}` returns a Mapbox Vector Tile. It uses a
-  fixed 40-pixel cluster grid through zoom 14, then returns individual points.
+- `QUERY /samplesift/collections/{api_name}/tiles/{z}/{x}/{y}` returns a Mapbox Vector Tile.
+  Through zoom 14 it groups filtered points by proximity in Web Mercator using
+  PostGIS DBSCAN with a 40-pixel distance and a minimum of one point. Connected
+  chains of nearby points form one cluster, so a cluster can span more than 40
+  pixels. Clustering considers the entire filtered collection before selecting
+  cluster centroids for a tile, ensuring adjacent tiles agree on membership. This
+  can be expensive for large collections. At zoom 15 and above it returns
+  individual points. Cluster IDs depend on membership and are not permanent.
 - `QUERY /samplesift/collections/{api_name}/results` returns individual rows selected only by the body
   filters, ordering, and pagination; it is independent of map bounds.
 

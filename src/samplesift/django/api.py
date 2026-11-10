@@ -232,7 +232,7 @@ class SamplesiftAPI(NinjaAPI):
             payload: Annotated[dict[str, Any], Body(...)],
         ) -> HttpResponse:
             return HttpResponse(
-                _mvt(collection, _tile_queryset(collection, payload, z, x, y), z, x, y),
+                _mvt(collection, _queryset(collection, payload), z, x, y),
                 content_type="application/vnd.mapbox-vector-tile",
             )
 
@@ -352,12 +352,6 @@ def _queryset(collection: type[SampleSiftCollection], payload: dict[str, Any]) -
     return _apply_filters(query, collection, payload)
 
 
-def _tile_queryset(
-    collection: type[SampleSiftCollection], payload: dict[str, Any], z: int, x: int, y: int
-) -> QuerySet[models.Model]:
-    return _queryset(collection, payload).filter(geometry__intersects=_tile_polygon(z, x, y))
-
-
 def _results_for_collection(
     collection: type[SampleSiftCollection], payload: dict[str, Any]
 ) -> dict[str, Any]:
@@ -394,6 +388,7 @@ def _results_for_collection(
 
 
 def _mvt(collection: type[SampleSiftCollection], query: QuerySet[models.Model], z: int, x: int, y: int) -> bytes:
+    tile_bounds = _tile_polygon(z, x, y)
     connection = connections[registry.target_database()]
     if connection.vendor != "postgresql":
         raise HttpError(501, "Vector tiles require the configured PostGIS database.")
@@ -404,6 +399,8 @@ def _mvt(collection: type[SampleSiftCollection], query: QuerySet[models.Model], 
     selected = ", ".join(quote(field) for field in fields)
     geometry = "ST_AsMVTGeom(ST_Transform(geometry, 3857), ST_TileEnvelope(%s, %s, %s), 4096, 0, true) AS geom"
     if z > CLUSTER_MAX_ZOOM:
+        base = query.filter(geometry__intersects=tile_bounds).values(*fields, "geometry")
+        base_sql, base_params = base.query.sql_with_params()
         sql = f"WITH filtered AS ({base_sql}) SELECT COALESCE(ST_AsMVT(tile, %s, 4096, 'geom'), ''::bytea) FROM (SELECT {selected}, false AS cluster, 1 AS point_count, {geometry} FROM filtered) AS tile"
         params = [*base_params, collection.api_name(), z, x, y]
     else:
@@ -413,10 +410,11 @@ def _mvt(collection: type[SampleSiftCollection], query: QuerySet[models.Model], 
             for field in fields
         )
         sql = f"""WITH filtered AS ({base_sql}), grouped AS (
-            SELECT ST_SnapToGrid(ST_Transform(geometry, 3857), %s) AS cell, * FROM filtered
+            SELECT ST_ClusterDBSCAN(ST_Transform(geometry, 3857), eps := %s, minpoints := 1)
+                OVER (ORDER BY source_pk) AS cell, * FROM filtered
         ) SELECT COALESCE(ST_AsMVT(tile, %s, 4096, 'geom'), ''::bytea) FROM (
             SELECT {grouped}, count(*) > 1 AS cluster, count(*) AS point_count,
-            encode(ST_AsEWKB(cell), 'hex') AS cluster_id,
+            md5(min(source_pk)) AS cluster_id,
             ST_AsMVTGeom(ST_Centroid(ST_Collect(ST_Transform(geometry, 3857))), ST_TileEnvelope(%s, %s, %s), 4096, 0, true) AS geom
             FROM grouped GROUP BY cell
         ) AS tile"""
