@@ -98,7 +98,7 @@ class CollectionRegistry:
                 "managed": False,
             }
             if "geometry" in attributes:
-                from django.contrib.gis.db.models.indexes import GistIndex
+                from django.contrib.postgres.indexes import GistIndex
 
                 meta_attributes["indexes"] = [GistIndex(fields=["geometry"])]
             attributes["Meta"] = type(

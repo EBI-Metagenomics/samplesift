@@ -4,6 +4,8 @@ import os
 
 from .settings import *
 
+INSTALLED_APPS = [*INSTALLED_APPS, "django.contrib.postgres"]
+
 DATABASES = {
     "default": {
         "ENGINE": "django.contrib.gis.db.backends.postgis",

@@ -27,6 +27,8 @@ class ApiSampleCollection(SampleSiftCollection):
 
     class Query:
         default_ordering: ClassVar[list[str]] = ["-score"]
+        query_example: ClassVar[dict] = {"filter": {"op": ">=", "args": [{"property": "score"}, 10]}}
+        tile_example: ClassVar[dict[str, int]] = {"z": 10, "x": 543, "y": 309}
 
 
 class AirQualitySample(models.Model):
@@ -61,6 +63,13 @@ def test_openapi_describes_query_operations_and_registered_collection() -> None:
         "content"
     ]["application/json"]["schema"]
     assert request_schema == {"$ref": "#/components/schemas/ApiSamplesQuery"}
+    for suffix in ("results", "tiles/{z}/{x}/{y}"):
+        body = schema["paths"][f"/samplesift/collections/api-samples/{suffix}"]["query"]["requestBody"]
+        assert body["content"]["application/json"]["example"] == ApiSampleCollection.Query.query_example
+    tile = schema["paths"]["/samplesift/collections/api-samples/tiles/{z}/{x}/{y}"]["query"]
+    assert {param["name"]: param["example"] for param in tile["parameters"]} == {
+        "z": 10, "x": 543, "y": 309
+    }
 
 
 def test_queryable_alias_and_capabilities() -> None:

@@ -299,7 +299,16 @@ class SamplesiftAPI(NinjaAPI):
             operation["x-samplesift-queryables"] = schema_path[: -len(path)] + f"/collections/{name}/queryables"
             operation.setdefault("requestBody", {"required": True, "content": {}})["content"][
                 "application/json"
-            ] = {"schema": {"$ref": f"#/components/schemas/{query_name}"}}
+            ] = {
+                "schema": {"$ref": f"#/components/schemas/{query_name}"},
+                "example": getattr(getattr(collection, "Query", None), "query_example", {}),
+            }
+            if not path.endswith("/results"):
+                tile_example = getattr(getattr(collection, "Query", None), "tile_example", None)
+                if tile_example is not None:
+                    for parameter in operation.get("parameters", []):
+                        if parameter.get("in") == "path" and parameter.get("name") in tile_example:
+                            parameter["example"] = tile_example[parameter["name"]]
             responses = operation.setdefault("responses", {})
             response_200 = responses.get("200") or responses.get(200) or {"description": "Success"}
             responses["200"] = response_200

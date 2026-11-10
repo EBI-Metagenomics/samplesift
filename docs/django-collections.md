@@ -110,7 +110,7 @@ python manage.py samplesift_sync_schema
 
 The command enables the `postgis` extension and creates missing registered
 collection tables. It reports missing, extra, type-incompatible, or
-nullability-incompatible columns as schema drift. It does not alter or drop
+nullability-incompatible columns as schema drift, including point geometry subtype and SRID. It does not alter or drop
 existing tables. The database user therefore needs permission to create the
 PostGIS extension.
 
@@ -210,8 +210,15 @@ contract inspired by OGC, not a claim of OGC API conformance.
 Results accept either
 offset pagination (with `total`) or cursor pagination (with `next_cursor`).
 `/samplesift/openapi.json` is generated from the startup registry as OpenAPI 3.2.1
-and includes a separate operation and schemas for every collection. Register API
+and includes a separate operation and schemas for every collection. Collections may set `Query.query_example` to a valid request body for both query
+operations, and `Query.tile_example` to a dictionary of `z`, `x`, and `y` values for the tile
+operation’s path parameter examples. Register API
 collections during Django startup; registrations after `api.urls` is accessed are
 rejected and require a process restart. Stock
 MapLibre/Leaflet tile sources issue only `GET`, so use a small custom source
 adapter to fetch MVT bytes with `QUERY`.
+
+Spatial collection indexes use Django's PostgreSQL `GistIndex`; creating and
+registering a spatial collection therefore requires Django's PostgreSQL support
+and its database driver as well as the PostGIS database. Add
+`django.contrib.postgres` to `INSTALLED_APPS` for spatial collections.

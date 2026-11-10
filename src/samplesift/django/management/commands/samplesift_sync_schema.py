@@ -49,6 +49,18 @@ class Command(BaseCommand):
                 actual[name].type_code, actual[name]
             )
             expected_type = expected[name].get_internal_type()
+            if actual_type == "GeometryField" and expected_type == "PointField":
+                # PostgreSQL reports all PostGIS geometry subtypes under one OID.
+                # The typmod retains the subtype and SRID needed to validate it.
+                with connection.cursor() as cursor:  # type: ignore[attr-defined]
+                    cursor.execute(
+                        "SELECT format_type(atttypid, atttypmod) FROM pg_attribute "
+                        "WHERE attrelid = %s::regclass AND attname = %s AND NOT attisdropped",
+                        [model._meta.db_table, name],  # type: ignore[attr-defined]
+                    )
+                    row = cursor.fetchone()
+                if row and row[0].lower() == expected[name].db_type(connection).lower():
+                    actual_type = expected_type
             if actual_type != expected_type:
                 messages.append(f"column {name} has type {actual_type}, expected {expected_type}")
             if actual[name].null_ok != expected[name].null:
