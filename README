@@ -29,18 +29,21 @@ INSTALLED_APPS = [
 
 ## Django collections
 
-SampleSift writes derived collection tables to the `samplesift` database alias
-(or the alias in `SAMPLESIFT_DATABASE_ALIAS`). The target must use Django's
-PostGIS backend. For local development, start it with:
+SampleSift writes derived collection tables to Django's `default` database, or
+the alias specified by `SAMPLESIFT_DATABASE_ALIAS`. The target must be PostgreSQL;
+spatial collections require Django's PostGIS backend. Existing deployments using
+the `samplesift` alias should set `SAMPLESIFT_DATABASE_ALIAS = "samplesift"` to
+keep using it. Changing the target does not move existing tables. For local
+development, start PostGIS with:
 
 ```shell
 docker compose up -d postgis
 ```
 
-Then configure the alias and create registered collection tables:
+Then configure the default database and create registered collection tables:
 
 ```python
-DATABASES["samplesift"] = {
+DATABASES["default"] = {
     "ENGINE": "django.contrib.gis.db.backends.postgis",
     "NAME": "samplesift",
     "USER": "samplesift",

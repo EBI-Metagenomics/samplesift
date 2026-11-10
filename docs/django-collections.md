@@ -93,8 +93,13 @@ over `attr`; a property must define one of them.
 
 ## Storage and schema setup
 
-Collection writes use `SAMPLESIFT_DATABASE_ALIAS`, defaulting to `samplesift`.
-That alias must point to PostgreSQL using `django.contrib.gis.db.backends.postgis`.
+Collection storage uses `SAMPLESIFT_DATABASE_ALIAS`, defaulting to Django's
+`default` database. The selected database must use PostgreSQL; SampleSift raises
+a configuration error when a non-PostgreSQL backend is selected. Spatial
+collections require `django.contrib.gis.db.backends.postgis` and PostGIS.
+To retain an existing `samplesift` target, set
+`SAMPLESIFT_DATABASE_ALIAS = "samplesift"` explicitly. Changing the target does
+not move or populate existing collection tables.
 
 For local development:
 
@@ -102,7 +107,8 @@ For local development:
 docker compose up -d postgis
 ```
 
-Then configure the `samplesift` alias and run:
+Then configure the default database (or set `SAMPLESIFT_DATABASE_ALIAS` to a
+separate configured database) and run:
 
 ```shell
 python manage.py samplesift_sync_schema

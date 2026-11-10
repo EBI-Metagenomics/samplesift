@@ -7,7 +7,8 @@ from collections.abc import Callable
 from typing import Any
 
 from django.conf import settings
-from django.db import models, transaction
+from django.core.exceptions import ImproperlyConfigured
+from django.db import connections, models, transaction
 from django.db.models.signals import post_delete, post_save
 
 from .models import SampleSiftCollection
@@ -64,7 +65,12 @@ class CollectionRegistry:
         return tuple(self._collections)
 
     def target_database(self) -> str:
-        return getattr(settings, "SAMPLESIFT_DATABASE_ALIAS", "samplesift")
+        alias = getattr(settings, "SAMPLESIFT_DATABASE_ALIAS", "default")
+        if connections[alias].vendor != "postgresql":
+            raise ImproperlyConfigured(
+                f"SampleSift requires PostgreSQL/PostGIS; database {alias!r} is not PostgreSQL."
+            )
+        return alias
 
     def get_collection(self, api_name: str) -> type[SampleSiftCollection]:
         try:

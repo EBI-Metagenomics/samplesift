@@ -21,4 +21,4 @@ DATABASE = {
     "HOST": os.environ.get("POSTGRES_HOST", "localhost"),
     "PORT": os.environ.get("POSTGRES_PORT", "55433"),
 }
-DATABASES = {"default": DATABASE.copy(), "samplesift": DATABASE.copy()}
+DATABASES = {"default": DATABASE.copy()}

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from django.core.exceptions import ImproperlyConfigured
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connections
 
@@ -12,12 +13,11 @@ class Command(BaseCommand):
     help = "Create missing SampleSift collection tables and report schema drift."
 
     def handle(self, *args: object, **options: object) -> None:
-        alias = registry.target_database()
+        try:
+            alias = registry.target_database()
+        except ImproperlyConfigured as error:
+            raise CommandError(str(error)) from error
         connection = connections[alias]
-        if connection.vendor != "postgresql":
-            raise CommandError(
-                f"SampleSift requires PostgreSQL/PostGIS; database {alias!r} is not PostgreSQL."
-            )
 
         with connection.schema_editor() as editor:
             editor.execute("CREATE EXTENSION IF NOT EXISTS postgis")

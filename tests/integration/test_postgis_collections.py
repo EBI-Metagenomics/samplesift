@@ -35,12 +35,12 @@ registry.register(SchemaSampleCollection)
 def test_sync_schema_enables_postgis_and_creates_registered_tables() -> None:
     call_command("samplesift_sync_schema")
 
-    with connections["samplesift"].cursor() as cursor:
+    with connections["default"].cursor() as cursor:
         cursor.execute("SELECT postgis_version()")
         assert cursor.fetchone()[0]
 
     assert registry.get_model(SchemaSampleCollection)._meta.db_table in connections[
-        "samplesift"
+        "default"
     ].introspection.table_names()
 
 
@@ -102,7 +102,7 @@ def test_spatial_schema_can_be_validated_after_creation() -> None:
     local_registry = CollectionRegistry()
     local_registry.register(SpatialSchemaCollection)
     model = local_registry.get_model(SpatialSchemaCollection)
-    target = connections["samplesift"]
+    target = connections[registry.target_database()]
     with target.schema_editor() as editor:
         editor.execute("CREATE EXTENSION IF NOT EXISTS postgis")
         editor.create_model(model)

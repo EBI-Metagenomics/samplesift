@@ -64,18 +64,28 @@ def collection_tables(django_db_setup: object, django_db_blocker: object) -> Non
     with django_db_blocker.unblock():
         with connections["default"].schema_editor() as editor:
             editor.create_model(Sample)
-        with connections["samplesift"].schema_editor() as editor:
-            editor.create_model(collection_model)
+        for alias in ("default", "samplesift"):
+            with connections[alias].schema_editor() as editor:
+                editor.create_model(collection_model)
     yield
     with django_db_blocker.unblock():
-        with connections["samplesift"].schema_editor() as editor:
-            editor.delete_model(collection_model)
+        for alias in ("default", "samplesift"):
+            with connections[alias].schema_editor() as editor:
+                editor.delete_model(collection_model)
         with connections["default"].schema_editor() as editor:
             editor.delete_model(Sample)
 
 
+@pytest.fixture(params=["default", "samplesift"])
+def target_alias(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> str:
+    # Exercise synchronization on SQLite independently of target backend validation.
+    alias = request.param
+    monkeypatch.setattr(registry, "target_database", lambda: alias)
+    return alias
+
+
 @pytest.mark.django_db(databases=["default", "samplesift"], transaction=True)
-def test_sample_collection_syncs_selected_fields_and_custom_property() -> None:
+def test_sample_collection_syncs_selected_fields_and_custom_property(target_alias: str) -> None:
     sample = Sample.objects.create(
         lat=41.3851,
         lon=2.1734,
@@ -83,7 +93,7 @@ def test_sample_collection_syncs_selected_fields_and_custom_property() -> None:
         species_name="quercus ilex",
     )
 
-    row = registry.get_model(SampleCollection).objects.using("samplesift").get(
+    row = registry.get_model(SampleCollection).objects.using(target_alias).get(
         source_pk=str(sample.pk)
     )
 
@@ -93,7 +103,7 @@ def test_sample_collection_syncs_selected_fields_and_custom_property() -> None:
 
 
 @pytest.mark.django_db(databases=["default", "samplesift"], transaction=True)
-def test_sample_collection_updates_and_deletes_after_source_changes() -> None:
+def test_sample_collection_updates_and_deletes_after_source_changes(target_alias: str) -> None:
     sample = Sample.objects.create(
         lat=1,
         lon=2,
@@ -104,19 +114,19 @@ def test_sample_collection_updates_and_deletes_after_source_changes() -> None:
     sample.save()
 
     collection_model = registry.get_model(SampleCollection)
-    assert collection_model.objects.using("samplesift").get(
+    assert collection_model.objects.using(target_alias).get(
         source_pk=str(sample.pk)
     ).temperature == 4
 
     sample.delete()
 
-    assert not collection_model.objects.using("samplesift").filter(
+    assert not collection_model.objects.using(target_alias).filter(
         source_pk=str(sample.pk)
     ).exists()
 
 
 @pytest.mark.django_db(databases=["default", "samplesift"], transaction=True)
-def test_rolled_back_source_write_is_not_materialised() -> None:
+def test_rolled_back_source_write_is_not_materialised(target_alias: str) -> None:
     with pytest.raises(RuntimeError), transaction.atomic():
         sample = Sample.objects.create(
             lat=1,
@@ -127,6 +137,6 @@ def test_rolled_back_source_write_is_not_materialised() -> None:
         source_pk = str(sample.pk)
         raise RuntimeError("abort source transaction")
 
-    assert not registry.get_model(SampleCollection).objects.using("samplesift").filter(
+    assert not registry.get_model(SampleCollection).objects.using(target_alias).filter(
         source_pk=source_pk
     ).exists()
