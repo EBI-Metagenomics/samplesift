@@ -1,0 +1,52 @@
+{
+  "name": "@samplesift/components",
+  "version": "0.1.0",
+  "description": "Framework-agnostic spatial sample explorer built with Lit and MapLibre",
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/sample-sift.js",
+  "module": "./dist/sample-sift.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/sample-sift.js"
+    },
+    "./data": {
+      "types": "./dist/types/data/index.d.ts",
+      "import": "./dist/data.js"
+    }
+  },
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "typecheck": "tsc --noEmit",
+    "build": "npm run typecheck && vite build && tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "test:browser": "playwright test",
+    "preview": "vite preview --host 127.0.0.1"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "dependencies": {
+    "@turf/boolean-point-in-polygon": "7.4.0",
+    "lit": "3.3.3",
+    "maplibre-gl": "6.17.0",
+    "terra-draw": "1.39.0",
+    "terra-draw-maplibre-gl-adapter": "1.5.0",
+    "@types/geojson": "7946.0.16"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.65.0",
+    "typescript": "7.0.2",
+    "vite": "8.3.7",
+    "vitest": "5.1.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/EBI-Metagenomics/samplesift.git",
+    "directory": "frontend/packages/components"
+  }
+}
