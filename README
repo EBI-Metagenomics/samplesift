@@ -1,0 +1,44 @@
+# Samplesift
+
+Samplesift is a Python package for building reusable data projections and their
+integrations.
+
+## Installation
+
+Install the framework-independent package:
+
+```shell
+pip install samplesift
+```
+
+Install Django support when it is needed:
+
+```shell
+pip install "samplesift[django]"
+```
+
+Then add the Django app to `INSTALLED_APPS`:
+
+```python
+INSTALLED_APPS = [
+    # ...
+    "samplesift.django.apps.SamplesiftDjangoConfig",
+]
+```
+
+## Repository layout
+
+```text
+src/samplesift/       Python package and optional integrations
+tests/                Python test suite
+docs/                 Architecture and design documentation
+frontend/             Reserved, self-contained frontend workspace
+```
+
+The Python package and future npm packages are deliberately independent. The
+frontend will eventually have its own `frontend/package.json` and publishable
+packages under `frontend/packages/`; it must not introduce a root npm workspace
+or couple npm releases to the Python distribution.
+
+Future Python integrations are exposed as extras when implemented, for example
+`samplesift[jupyter]` and `samplesift[sandbox]`.
