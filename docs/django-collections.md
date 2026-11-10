@@ -143,18 +143,30 @@ do not add source-of-truth business state to collection tables.
 
 ## Verification
 
-Run the fast suite with:
-
-```shell
-uv run pytest
-```
-
-The Docker-backed PostGIS integration test uses `tests.postgis_settings`:
+All tests use PostgreSQL with PostGIS. Start the local service and run the full
+suite with:
 
 ```shell
 docker compose up -d postgis
-DJANGO_SETTINGS_MODULE=tests.postgis_settings uv run pytest tests/integration
+uv run pytest
 ```
+
+Run either group separately with:
+
+```shell
+uv run pytest tests --ignore=tests/integration
+uv run pytest tests/integration
+```
+
+The test settings default to the Docker service at `127.0.0.1:55432`, with
+database, user, and password `samplesift`. Override these using `POSTGRES_HOST`,
+`POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD`.
+Django creates separate test databases for the `default` and `samplesift`
+aliases; the configured user needs permission to create and drop databases and
+enable PostGIS. The local Python environment also needs the GDAL and GEOS
+libraries required by GeoDjango. `tests.postgis_settings` remains available as
+an alias for the shared test settings. If Django cannot discover those libraries,
+set `GDAL_LIBRARY_PATH` and `GEOS_LIBRARY_PATH` to their installed paths.
 
 ## Spatial query API
 

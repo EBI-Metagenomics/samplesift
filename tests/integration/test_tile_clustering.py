@@ -7,8 +7,6 @@ from samplesift.django import Point, SampleSiftCollection
 from samplesift.django.api import _apply_filters, _mvt, _queryables
 from samplesift.django.registry import CollectionRegistry
 
-pytestmark = pytest.mark.skipif(connection.vendor != "postgresql", reason="Requires PostGIS")
-
 
 @pytest.mark.django_db(transaction=True)
 def test_distance_clusters_cross_tile_boundaries_and_respect_filters() -> None:

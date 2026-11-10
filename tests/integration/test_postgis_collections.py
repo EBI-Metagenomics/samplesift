@@ -4,14 +4,10 @@ from typing import ClassVar
 
 import pytest
 from django.core.management import call_command
-from django.db import connection, connections, models
+from django.db import connections, models
 
 from samplesift.django import SampleSiftCollection, registry
-
-pytestmark = pytest.mark.skipif(
-    connection.vendor != "postgresql",
-    reason="Run with DJANGO_SETTINGS_MODULE=tests.postgis_settings against Docker PostGIS.",
-)
+from samplesift.django.registry import CollectionRegistry
 
 
 class SchemaSample(models.Model):
@@ -28,20 +24,25 @@ class SchemaSampleCollection(SampleSiftCollection):
         model = SchemaSample
 
 
-registry.register(SchemaSampleCollection)
-
-
 @pytest.mark.django_db(databases=["default", "samplesift"], transaction=True)
-def test_sync_schema_enables_postgis_and_creates_registered_tables() -> None:
-    call_command("samplesift_sync_schema")
-
-    with connections["default"].cursor() as cursor:
-        cursor.execute("SELECT postgis_version()")
-        assert cursor.fetchone()[0]
-
-    assert registry.get_model(SchemaSampleCollection)._meta.db_table in connections[
-        "default"
-    ].introspection.table_names()
+def test_sync_schema_enables_postgis_and_creates_registered_tables(monkeypatch) -> None:
+    local_registry = CollectionRegistry()
+    local_registry.register(SchemaSampleCollection)
+    monkeypatch.setattr(
+        "samplesift.django.management.commands.samplesift_sync_schema.registry", local_registry
+    )
+    model = local_registry.get_model(SchemaSampleCollection)
+    connection = connections["default"]
+    try:
+        call_command("samplesift_sync_schema")
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT postgis_version()")
+            assert cursor.fetchone()[0]
+        assert model._meta.db_table in connection.introspection.table_names()
+    finally:
+        if model._meta.db_table in connection.introspection.table_names():
+            with connection.schema_editor() as editor:
+                editor.delete_model(model)
 
 
 def test_spatial_collection_registers_gist_index() -> None:

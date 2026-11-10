@@ -77,10 +77,9 @@ def collection_tables(django_db_setup: object, django_db_blocker: object) -> Non
 
 
 @pytest.fixture(params=["default", "samplesift"])
-def target_alias(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> str:
-    # Exercise synchronization on SQLite independently of target backend validation.
+def target_alias(request: pytest.FixtureRequest, settings: object) -> str:
     alias = request.param
-    monkeypatch.setattr(registry, "target_database", lambda: alias)
+    settings.SAMPLESIFT_DATABASE_ALIAS = alias
     return alias
 
 

@@ -42,8 +42,8 @@ class DefaultNamedCollection(SampleSiftCollection):
 
 
 registry.register(ApiSampleCollection)
-# Fast SQLite tests do not load GDAL. The PostGIS integration suite exercises
-# Point materialisation; this test isolates the registry-driven OAS expansion.
+# The PostGIS integration suite exercises Point materialisation; this test
+# isolates the registry-driven OAS expansion.
 registry._api_names["api-samples"] = ApiSampleCollection
 api.register_collection(ApiSampleCollection)
 
