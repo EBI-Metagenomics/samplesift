@@ -1,9 +1,27 @@
 [project]
 name = "samplesift"
 version = "0.1.0"
+description = "Spatial querying and selection of geolocation-tagged data"
+readme = { file = "README", content-type = "text/markdown" }
 requires-python = ">=3.12"
+dependencies = []
+
+[project.optional-dependencies]
+django = [
+  "Django>=6.0,<6.1",
+]
+
+[build-system]
+requires = ["uv_build>=0.11,<0.12"]
+build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
   "pre-commit>=4.0,<5",
+  "pytest>=9.0,<10",
+  "pytest-django>=4.11,<5",
+  "Django>=6.0,<6.1",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
