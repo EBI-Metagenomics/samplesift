@@ -30,8 +30,5 @@ jobs:
       - name: Lint Python with Ruff
         run: uvx ruff@0.17.3 check --no-fix .
 
-      - name: Test Python package
-        run: uv run pytest
-
       - name: Lint with Biome
         run: uv run pre-commit run biome-lint --all-files

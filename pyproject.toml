@@ -9,6 +9,8 @@ dependencies = []
 [project.optional-dependencies]
 django = [
   "Django>=6.0,<6.1",
+  "django-ninja>=1.5,<2",
+  "pygeofilter>=0.3,<0.4",
 ]
 
 [build-system]
@@ -20,8 +22,12 @@ dev = [
   "pre-commit>=4.0,<5",
   "pytest>=9.0,<10",
   "pytest-django>=4.11,<5",
+  "psycopg[binary]>=3.2,<4",
   "Django>=6.0,<6.1",
+  "django-ninja>=1.5,<2",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
+DJANGO_SETTINGS_MODULE = "tests.settings"
