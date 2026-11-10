@@ -169,16 +169,45 @@ unique `Meta.api_name` to override it. `Point` accepts a source GeoDjango point 
 generated table has a spatial GiST index; run `samplesift_sync_schema` after
 adding it.
 
-Each API collection has two static `QUERY` endpoints with a collection-specific
-JSON schema:
+Each API collection has discovery and two static `QUERY` endpoints:
 
-- `QUERY /samplesift/{api_name}/tiles/{z}/{x}/{y}` returns a Mapbox Vector Tile. It uses a
+- `GET /samplesift/collections/{api_name}/queryables` returns a JSON Schema document
+  describing public queryables and their supported operators.
+- `QUERY /samplesift/collections/{api_name}/tiles/{z}/{x}/{y}` returns a Mapbox Vector Tile. It uses a
   fixed 40-pixel cluster grid through zoom 14, then returns individual points.
-- `QUERY /samplesift/{api_name}/results` returns individual rows selected only by the body
+- `QUERY /samplesift/collections/{api_name}/results` returns individual rows selected only by the body
   filters, ordering, and pagination; it is independent of map bounds.
 
-Filters are ANDed. Strings support `eq`, `ne`, `in`, and `not_in`; numeric and
-temporal values additionally support range comparisons. Results accept either
+The optional `filter` body property is a CQL2 JSON expression, for example
+`{"op": ">=", "args": [{"property": "temperature"}, 10]}`. Supported
+operators are `and`, `or`, `not`, `=`, `<>`, `in`, and `isNull`; numeric and
+temporal fields also support `<`, `<=`, `>`, and `>=`. Comparisons and `in`
+take a property on the left and a typed literal or non-empty literal list on the
+right. `isNull` takes one property. Null comparisons are unknown, including
+under `not`; only true expressions match. CQL2 JSON is the only filter language.
+The former URLs and `filters` array are no longer supported.
+
+All materialized scalar fields are queryable by default. Override public names,
+operators, and UI metadata on the collection declaration:
+
+```python
+class Query:
+    default_ordering = ["-temperature"]
+    queryables = {
+        "temperature": {
+            "name": "water_temperature",
+            "operators": ["=", ">=", "<=", "isNull"],
+            "annotations": {"unit": "°C", "control": "range", "order": 1},
+        },
+    }
+```
+
+Overrides use materialized field names as keys; public names are used in filters.
+Sorting and returned fields retain materialized field names. The discovery schema
+describes types and capabilities, not observed data ranges. This is a SampleSift
+contract inspired by OGC, not a claim of OGC API conformance.
+
+Results accept either
 offset pagination (with `total`) or cursor pagination (with `next_cursor`).
 `/samplesift/openapi.json` is generated from the startup registry as OpenAPI 3.2.1
 and includes a separate operation and schemas for every collection. Register API

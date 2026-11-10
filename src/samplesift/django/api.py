@@ -17,6 +17,9 @@ from django.http import HttpResponse
 from ninja import Body, NinjaAPI
 from ninja.errors import HttpError
 
+from samplesift.query import Queryable
+
+from .filters import compile_filter
 from .models import SampleSiftCollection
 from .registry import registry
 
@@ -71,7 +74,7 @@ def _field_schema(field: models.Field[Any, Any]) -> dict[str, Any]:
 
 
 def _allowed_operators(field: models.Field[Any, Any]) -> list[str]:
-    operators = ["eq", "ne", "in", "not_in", "is_null"]
+    operators = ["=", "<>", "in", "isNull"]
     if isinstance(
         field,
         (
@@ -82,7 +85,7 @@ def _allowed_operators(field: models.Field[Any, Any]) -> list[str]:
             models.TimeField,
         ),
     ) and not isinstance(field, models.BooleanField):
-        operators.extend(["gt", "gte", "lt", "lte"])
+        operators.extend([">", ">=", "<", "<="])
     return operators
 
 
@@ -94,48 +97,36 @@ def _public_fields(collection: type[SampleSiftCollection]) -> dict[str, models.F
     }
 
 
+def _queryables(collection: type[SampleSiftCollection]) -> dict[str, tuple[Queryable, str]]:
+    overrides = getattr(getattr(collection, "Query", None), "queryables", {})
+    fields = _public_fields(collection)
+    if not isinstance(overrides, dict) or set(overrides) - set(fields):
+        raise ValueError("Query.queryables must map materialized field names to overrides.")
+    result = {}
+    for field_name, field in fields.items():
+        override = overrides.get(field_name, {})
+        if not isinstance(override, dict) or set(override) - {"name", "operators", "annotations"}:
+            raise ValueError(f"Invalid queryable override for {field_name!r}.")
+        name = override.get("name", field_name)
+        operators = override.get("operators", _allowed_operators(field))
+        annotations = override.get("annotations", {})
+        if not isinstance(name, str) or not name or name in result or not isinstance(operators, (list, tuple)) or not set(operators) <= set(_allowed_operators(field)) or not isinstance(annotations, dict) or "operators" in annotations:
+            raise ValueError(f"Invalid queryable override for {field_name!r}.")
+        result[name] = (Queryable(name, _field_schema(field), tuple(operators), annotations), field_name)
+    return result
+
+
 def _apply_filters(
     query: QuerySet[models.Model], collection: type[SampleSiftCollection], payload: dict[str, Any]
 ) -> QuerySet[models.Model]:
-    filters = payload.get("filters", [])
-    if not isinstance(filters, list):
-        raise HttpError(422, "filters must be a list.")
-    fields = _public_fields(collection)
-    for clause in filters:
-        if not isinstance(clause, dict):
-            raise HttpError(422, "Each filter must be an object.")
-        name, operator = clause.get("field"), clause.get("op")
-        if not isinstance(name, str) or name not in fields:
-            raise HttpError(422, "Filter field is not a collection scalar field.")
-        if operator not in _allowed_operators(fields[name]):
-            raise HttpError(422, f"Operator {operator!r} is not valid for {name!r}.")
-        value = clause.get("value")
-        if operator in {"in", "not_in"}:
-            if not isinstance(value, list):
-                raise HttpError(422, f"{operator} needs a list value.")
-            if operator == "in":
-                query = query.filter(**{f"{name}__in": value})
-            else:
-                query = query.exclude(**{f"{name}__in": value})
-        elif operator == "is_null":
-            if not isinstance(value, bool):
-                raise HttpError(422, "is_null needs a boolean value.")
-            query = query.filter(**{f"{name}__isnull": value})
-        elif value is None:
-            if operator == "eq":
-                query = query.filter(**{f"{name}__isnull": True})
-            elif operator == "ne":
-                query = query.filter(**{f"{name}__isnull": False})
-            else:
-                raise HttpError(422, f"{operator} does not accept null.")
-        elif operator == "ne":
-            query = query.exclude(**{name: value})
-        else:
-            lookup = name if operator == "eq" else f"{name}__{operator}"
-            query = query.filter(**{lookup: value})
-    return query
-
-
+    if "filters" in payload or "filter-lang" in payload:
+        raise HttpError(422, "Use filter with a CQL2 JSON expression.")
+    if "filter" not in payload:
+        return query
+    try:
+        return query.filter(compile_filter(payload["filter"], _queryables(collection)))
+    except (ValueError, TypeError, KeyError) as error:
+        raise HttpError(422, str(error)) from error
 def _ordering(collection: type[SampleSiftCollection], payload: dict[str, Any]) -> list[str]:
     ordering = payload.get("sort", collection.default_ordering())
     if not isinstance(ordering, list) or not ordering or not all(isinstance(item, str) for item in ordering):
@@ -153,7 +144,7 @@ def _ordering(collection: type[SampleSiftCollection], payload: dict[str, Any]) -
 
 
 def _cursor_context(payload: dict[str, Any], ordering: list[str]) -> str:
-    data = {key: payload.get(key) for key in ("filters", "sort")}
+    data = {key: payload.get(key) for key in ("filter", "sort")}
     data["ordering"] = ordering
     return hashlib.sha256(json.dumps(data, sort_keys=True, default=str).encode()).hexdigest()
 
@@ -217,8 +208,16 @@ class SamplesiftAPI(NinjaAPI):
         name = collection.api_name()
         if any(existing.api_name() == name for existing in self._collection_paths.values()):
             return
-        result_path = f"/{name}/results"
-        tile_path = f"/{name}/tiles/{{z}}/{{x}}/{{y}}"
+        _queryables(collection)
+        result_path = f"/collections/{name}/results"
+        tile_path = f"/collections/{name}/tiles/{{z}}/{{x}}/{{y}}"
+        discovery_path = f"/collections/{name}/queryables"
+
+        def queryables_operation(request: Any) -> dict[str, Any]:
+            return {"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": {key: descriptor.json_schema() for key, (descriptor, _) in _queryables(collection).items()}, "additionalProperties": False}
+
+        queryables_operation.__name__ = f"{name.replace('-', '_')}_queryables"
+        self.get(discovery_path, tags=[name], operation_id=f"{name.replace('-', '_')}_queryables")(queryables_operation)
 
         def result_operation(
             request: Any, payload: Annotated[dict[str, Any], Body(...)]
@@ -245,12 +244,14 @@ class SamplesiftAPI(NinjaAPI):
             tags=[name],
             response=dict,
             operation_id=f"{name.replace('-', '_')}_results",
+            openapi_extra={"x-samplesift-queryables": discovery_path},
         )(result_operation)
         self.api_operation(
             ["QUERY"],
             tile_path,
             tags=[name],
             operation_id=f"{name.replace('-', '_')}_tiles",
+            openapi_extra={"x-samplesift-queryables": discovery_path},
         )(tile_operation)
         self._collection_paths[result_path] = collection
         self._collection_paths[tile_path] = collection
@@ -263,28 +264,12 @@ class SamplesiftAPI(NinjaAPI):
             name = collection.api_name()
             title = "".join(part.title() for part in name.split("-"))
             fields = _public_fields(collection)
-            filter_variants = []
-            for field_name, field in fields.items():
-                value_schema = _field_schema(field)
-                filter_variants.append(
-                    {
-                        "type": "object",
-                        "required": ["field", "op", "value"],
-                        "properties": {
-                            "field": {"const": field_name},
-                            "op": {"enum": _allowed_operators(field)},
-                            "value": {"oneOf": [value_schema, {"type": "array", "items": value_schema}, {"type": "null"}]},
-                        },
-                    }
-                )
-            filter_name = f"{title}Filter"
             query_name = f"{title}Query"
             result_name = f"{title}Result"
-            components[filter_name] = {"oneOf": filter_variants}
             components[query_name] = {
                 "type": "object",
                 "properties": {
-                    "filters": {"type": "array", "items": {"$ref": f"#/components/schemas/{filter_name}"}},
+                    "filter": {"type": "object", "description": "CQL2 JSON expression"},
                     "sort": {"type": "array", "items": {"type": "string", "enum": [*fields, *[f"-{field}" for field in fields]]}},
                     "limit": {"type": "integer", "minimum": 1, "maximum": MAX_PAGE_SIZE, "default": DEFAULT_PAGE_SIZE},
                     "offset": {"type": "integer", "minimum": 0},
@@ -310,6 +295,8 @@ class SamplesiftAPI(NinjaAPI):
             )
             if operation is None:
                 continue
+            schema_path = next(key for key in schema["paths"] if key.endswith(path))
+            operation["x-samplesift-queryables"] = schema_path[: -len(path)] + f"/collections/{name}/queryables"
             operation.setdefault("requestBody", {"required": True, "content": {}})["content"][
                 "application/json"
             ] = {"schema": {"$ref": f"#/components/schemas/{query_name}"}}

@@ -172,14 +172,13 @@ resolved asynchronously, especially for high-cardinality relationships.
 
 ### Implemented HTTP query surface
 
-The first public query surface creates two static endpoints per registered
-collection: `QUERY /{api_name}/tiles/{z}/{x}/{y}` for clustered MVT and
-`QUERY /{api_name}/results` for paginated individual rows selected by body
-filters alone. Their bodies contain typed, AND-composed filters without a
-collection discriminator. The registry generates OpenAPI 3.2.1 operations and components for each
-collection at schema-render time. This API currently exposes every materialised
-scalar field; a future capability catalog can narrow that public surface without
-changing the endpoint shape.
+The public query surface provides collection-specific queryables discovery and
+`QUERY /collections/{api_name}/tiles/{z}/{x}/{y}` for clustered MVT and
+`QUERY /collections/{api_name}/results` for paginated rows. Bodies accept the
+documented CQL2 JSON subset. A backend-independent descriptor exposes materialized
+scalar fields by default, with public-name and capability overrides. The registry
+generates OpenAPI 3.2.1 operations and components for each collection. See
+[Django collections](django-collections.md) for the implemented contract.
 
 Geometry is declared as a WGS84 point copied from a source point or constructed
 from longitude/latitude. The result endpoint deliberately returns individual

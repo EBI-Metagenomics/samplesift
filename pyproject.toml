@@ -10,6 +10,7 @@ dependencies = []
 django = [
   "Django>=6.0,<6.1",
   "django-ninja>=1.5,<2",
+  "pygeofilter>=0.3,<0.4",
 ]
 
 [build-system]
