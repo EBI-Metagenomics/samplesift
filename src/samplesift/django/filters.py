@@ -1,11 +1,13 @@
 """Compile the supported CQL2 subset into null-aware Django predicates."""
 
+import json
+import math
 from datetime import date, datetime, time
 from typing import Any
 from uuid import UUID
 
 from django.db.models import Q
-from pygeofilter import ast
+from pygeofilter import ast, values
 from pygeofilter.parsers.cql2_json import parse
 
 
@@ -18,11 +20,11 @@ def compile_filter(expression: Any, descriptors: dict[str, tuple[Any, str]]) -> 
                 op, args = node.get("op"), node.get("args")
                 if set(node) != {"op", "args"} or not isinstance(args, list):
                     raise ValueError("Invalid expression shape.")
-                if op not in {"and", "or", "not", "isNull", "=", "<>", "<", "<=", ">", ">=", "in"}:
+                if op not in {"and", "or", "not", "isNull", "=", "<>", "<", "<=", ">", ">=", "in", "s_intersects"}:
                     raise ValueError("Unsupported operator.")
                 if (op in {"and", "or"} and len(args) < 2) or (op in {"not", "isNull"} and len(args) != 1) or (op not in {"and", "or", "not", "isNull"} and len(args) != 2):
                     raise ValueError("Invalid operator arity.")
-            elif not (set(node) in ({"property"}, {"date"}, {"timestamp"})):
+            elif not (set(node) in ({"property"}, {"date"}, {"timestamp"}, {"type", "coordinates"})):
                 raise ValueError("Unsupported expression value.")
             return 1 + sum(shape(v, depth + 1) for v in node.values())
         if isinstance(node, list):
@@ -65,6 +67,36 @@ def compile_filter(expression: Any, descriptors: dict[str, tuple[Any, str]]) -> 
             raise ValueError("Expected a timestamp literal.")
         return value
 
+    def polygon(value: Any) -> Any:
+        from django.contrib.gis.geos import GEOSException, GEOSGeometry
+
+        if not isinstance(value, values.Geometry):
+            raise TypeError("Expected a GeoJSON Polygon or MultiPolygon.")
+        data = value.geometry
+        if not isinstance(data, dict) or set(data) != {"type", "coordinates"} or data["type"] not in {"Polygon", "MultiPolygon"}:
+            raise ValueError("Expected a GeoJSON Polygon or MultiPolygon.")
+
+        def coordinates(items: Any, depth: int) -> None:
+            if not isinstance(items, list) or not items:
+                raise ValueError("Invalid polygon coordinates.")
+            if depth == 0:
+                if len(items) != 2 or any(isinstance(n, bool) or not isinstance(n, (int, float)) or not math.isfinite(n) for n in items):
+                    raise ValueError("Invalid polygon coordinates.")
+                if not (-180 <= items[0] <= 180 and -90 <= items[1] <= 90):
+                    raise ValueError("Polygon coordinates must be longitude and latitude in EPSG:4326.")
+            else:
+                for item in items:
+                    coordinates(item, depth - 1)
+
+        coordinates(data["coordinates"], 2 if data["type"] == "Polygon" else 3)
+        try:
+            geometry = GEOSGeometry(json.dumps(data), srid=4326)
+            if geometry.empty or not geometry.valid:
+                raise ValueError("Invalid polygon geometry.")
+        except (GEOSException, ValueError, TypeError) as error:
+            raise ValueError("Invalid polygon geometry.") from error
+        return geometry
+
     def walk(node: Any) -> tuple[Q, Q]:
         if isinstance(node, ast.Not):
             true, false = walk(node.sub_node)
@@ -76,7 +108,10 @@ def compile_filter(expression: Any, descriptors: dict[str, tuple[Any, str]]) -> 
         if isinstance(node, ast.IsNull):
             _, name = property_for(node.lhs, "isNull")
             return Q(**{f"{name}__isnull": True}), Q(**{f"{name}__isnull": False})
-        if isinstance(node, ast.In):
+        if isinstance(node, ast.GeometryIntersects):
+            _, name = property_for(node.lhs, "s_intersects")
+            match = Q(**{f"{name}__intersects": polygon(node.rhs)})
+        elif isinstance(node, ast.In):
             descriptor, name = property_for(node.lhs, "in")
             if not isinstance(node.sub_nodes, list) or not node.sub_nodes:
                 raise ValueError("IN requires a non-empty list.")

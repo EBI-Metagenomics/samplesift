@@ -4,7 +4,7 @@ import pytest
 from django.db import connection, models
 
 from samplesift.django import Point, SampleSiftCollection
-from samplesift.django.api import _mvt
+from samplesift.django.api import _apply_filters, _mvt, _queryables
 from samplesift.django.registry import CollectionRegistry
 
 pytestmark = pytest.mark.skipif(connection.vendor != "postgresql", reason="Requires PostGIS")
@@ -34,15 +34,16 @@ def test_distance_clusters_cross_tile_boundaries_and_respect_filters() -> None:
 
     local = CollectionRegistry()
     local.register(Collection)
+    assert _queryables(Collection)["geometry"][0].json_schema()["x-samplesift"]["operators"] == ["s_intersects"]
     model = local.get_model(Collection)
     with connection.schema_editor() as editor:
         editor.execute("CREATE EXTENSION IF NOT EXISTS postgis")
         editor.create_model(model)
     try:
         model.objects.bulk_create([
-            model(source_pk="a", label="keep", geometry=GeoPoint(-0.01, 10, srid=4326)),
-            model(source_pk="b", label="keep", geometry=GeoPoint(0.02, 10, srid=4326)),
-            model(source_pk="c", label="remove", geometry=GeoPoint(0.03, 10, srid=4326)),
+            model(source_pk="a", label="keep", geometry=GeoPoint(-0.1, 10, srid=4326)),
+            model(source_pk="b", label="keep", geometry=GeoPoint(0.2, 10, srid=4326)),
+            model(source_pk="c", label="remove", geometry=GeoPoint(0.3, 10, srid=4326)),
         ])
 
         def features(query, x):
@@ -72,6 +73,26 @@ def test_distance_clusters_cross_tile_boundaries_and_respect_filters() -> None:
         single = features(model.objects.filter(source_pk="b"), 2)
         assert single[0]["point_count"] == 1
         assert single[0]["label"] == "keep"
+
+        polygon = {"type": "Polygon", "coordinates": [[[0, 9], [1, 9], [1, 11], [0, 11], [0, 9]]]}
+        spatial_filter = {"op": "s_intersects", "args": [{"property": "geometry"}, polygon]}
+        filtered = _apply_filters(model.objects.all(), Collection, {"filter": spatial_filter})
+        assert set(filtered.values_list("source_pk", flat=True)) == {"b", "c"}
+        assert features(filtered, 2)[0]["point_count"] == 2
+        combined = {"op": "and", "args": [spatial_filter, {"op": "=", "args": [{"property": "label"}, "keep"]}]}
+        assert list(_apply_filters(model.objects.all(), Collection, {"filter": combined}).values_list("source_pk", flat=True)) == ["b"]
+
+        multi = {"type": "MultiPolygon", "coordinates": [
+            [[[-0.2, 9], [-0.1, 9], [-0.1, 11], [-0.2, 11], [-0.2, 9]]],
+            [[[0.1, 9], [0.4, 9], [0.4, 11], [0.1, 11], [0.1, 9]],
+             [[0.25, 9.5], [0.35, 9.5], [0.35, 10.5], [0.25, 10.5], [0.25, 9.5]]],
+        ]}
+        model.objects.create(source_pk="null", label="empty", geometry=None)
+        predicate = {"op": "s_intersects", "args": [{"property": "geometry"}, multi]}
+        filtered = _apply_filters(model.objects.all(), Collection, {"filter": predicate})
+        assert set(filtered.values_list("source_pk", flat=True)) == {"a", "b"}
+        negated = _apply_filters(model.objects.all(), Collection, {"filter": {"op": "not", "args": [predicate]}})
+        assert set(negated.values_list("source_pk", flat=True)) == {"c"}
     finally:
         with connection.schema_editor() as editor:
             editor.delete_model(model)

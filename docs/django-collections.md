@@ -199,6 +199,22 @@ right. `isNull` takes one property. Null comparisons are unknown, including
 under `not`; only true expressions match. CQL2 JSON is the only filter language.
 The former URLs and `filters` array are no longer supported.
 
+Spatial collections also expose `geometry` with the `s_intersects` operator. Its
+right operand is a GeoJSON Polygon or MultiPolygon in EPSG:4326, with longitude
+and latitude coordinates. Polygon holes are supported, and points on any boundary
+match. Invalid, empty, or out-of-range geometries are rejected. Null geometries
+are unknown under this predicate, including under `not`.
+
+```json
+{"filter": {"op": "s_intersects", "args": [
+  {"property": "geometry"},
+  {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]}
+]}}
+```
+
+This filter applies to both results and tiles, before tile clustering. The existing
+filter complexity limit also applies to polygon coordinates.
+
 All materialized scalar fields are queryable by default. Override public names,
 operators, and UI metadata on the collection declaration:
 

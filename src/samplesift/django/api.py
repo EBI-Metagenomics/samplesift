@@ -113,6 +113,10 @@ def _queryables(collection: type[SampleSiftCollection]) -> dict[str, tuple[Query
         if not isinstance(name, str) or not name or name in result or not isinstance(operators, (list, tuple)) or not set(operators) <= set(_allowed_operators(field)) or not isinstance(annotations, dict) or "operators" in annotations:
             raise ValueError(f"Invalid queryable override for {field_name!r}.")
         result[name] = (Queryable(name, _field_schema(field), tuple(operators), annotations), field_name)
+    if collection.geometry is not None:
+        if "geometry" in result:
+            raise ValueError("The queryable name 'geometry' is reserved for spatial filtering.")
+        result["geometry"] = (Queryable("geometry", {"type": "object", "description": "GeoJSON Point in EPSG:4326."}, ("s_intersects",)), "geometry")
     return result
 
 
@@ -269,7 +273,7 @@ class SamplesiftAPI(NinjaAPI):
             components[query_name] = {
                 "type": "object",
                 "properties": {
-                    "filter": {"type": "object", "description": "CQL2 JSON expression"},
+                    "filter": {"type": "object", "description": "CQL2 JSON expression; s_intersects accepts geometry and a GeoJSON Polygon or MultiPolygon in EPSG:4326."},
                     "sort": {"type": "array", "items": {"type": "string", "enum": [*fields, *[f"-{field}" for field in fields]]}},
                     "limit": {"type": "integer", "minimum": 1, "maximum": MAX_PAGE_SIZE, "default": DEFAULT_PAGE_SIZE},
                     "offset": {"type": "integer", "minimum": 0},

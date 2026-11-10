@@ -13,6 +13,29 @@ class FilterRow(models.Model):
 
 
 DESCRIPTORS = {"score": (Queryable("score", {"type": "integer"}, ("=", "<>", ">", "in", "isNull")), "value")}
+SPATIAL = {"geometry": (Queryable("geometry", {"type": "object"}, ("s_intersects",)), "geometry")}
+POLYGON = {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]]}
+
+
+def spatial(geometry: dict) -> dict:
+    return {"op": "s_intersects", "args": [{"property": "geometry"}, geometry]}
+
+
+def test_spatial_filter_compiles_and_preserves_null_semantics() -> None:
+    query = compile_filter({"op": "not", "args": [spatial(POLYGON)]}, SPATIAL)
+    assert "geometry__isnull" in str(query)
+    assert "geometry__intersects" in str(query)
+
+
+@pytest.mark.parametrize("geometry", [
+    {"type": "Point", "coordinates": [0, 0]},
+    {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1]]]},
+    {"type": "Polygon", "coordinates": [[[0, 0], [181, 0], [1, 1], [0, 0]]]},
+    {"type": "Polygon", "coordinates": [[[0, 0], [1, 1], [1, 0], [0, 1], [0, 0]]]},
+])
+def test_invalid_spatial_literals_are_rejected(geometry: dict) -> None:
+    with pytest.raises(ValueError):
+        compile_filter(spatial(geometry), SPATIAL)
 
 
 @pytest.mark.django_db(transaction=True)

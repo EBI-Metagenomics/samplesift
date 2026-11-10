@@ -87,8 +87,51 @@ commits. Bulk updates, raw SQL, and changes to related objects do not sync in th
 initial implementation.
 
 Registered spatial collections can be exposed with the ready-made Django Ninja
-API. See [Django collections](docs/django-collections.md#spatial-query-api) for
-mounting, the two `QUERY` endpoints, pagination, and map-client integration.
+API. Mount it in the host project's URL configuration:
+
+```python
+from django.urls import path
+from samplesift.django.api import api as samplesift_api
+
+urlpatterns = [path("samplesift/", samplesift_api.urls)]
+```
+
+With the example collection above and Django running on `localhost:8000`, inspect
+the available queryables:
+
+```shell
+curl http://localhost:8000/samplesift/collections/samples/queryables
+```
+
+Query results using a CQL2 JSON scalar filter, sorting, and pagination:
+
+```shell
+curl -X QUERY http://localhost:8000/samplesift/collections/samples/results \
+  -H 'Content-Type: application/json' \
+  -d '{"filter":{"op":">=","args":[{"property":"temperature"},10]},"sort":["-temperature"],"limit":20,"offset":0}'
+```
+
+Filter points using a GeoJSON polygon in longitude/latitude (EPSG:4326). Points
+on the boundary are included; MultiPolygons and polygon holes are also supported:
+
+```shell
+curl -X QUERY http://localhost:8000/samplesift/collections/samples/results \
+  -H 'Content-Type: application/json' \
+  -d '{"filter":{"op":"s_intersects","args":[{"property":"geometry"},{"type":"Polygon","coordinates":[[[-5,40],[0,40],[0,45],[-5,45],[-5,40]]]}]}}'
+```
+
+Fetch a vector tile using the same filter format. The response is binary Mapbox
+Vector Tile data:
+
+```shell
+curl -X QUERY http://localhost:8000/samplesift/collections/samples/tiles/2/1/1 \
+  -H 'Content-Type: application/json' \
+  -d '{"filter":{"op":">=","args":[{"property":"temperature"},10]}}' \
+  -o samples.mvt
+```
+
+See [Django collections](docs/django-collections.md#spatial-query-api) for the
+filter operators, pagination, and map-client integration.
 
 ## Repository layout
 
