@@ -1,5 +1,7 @@
 import type { Polygon } from 'geojson';
 import type { Sample, SearchQuery, SearchResult } from '../types';
+import { isValidDate, isTaxonId, validateFilters } from './filters';
+export { isValidDate } from './filters';
 
 const EPSILON = 1e-12;
 type Point = [number, number];
@@ -17,12 +19,6 @@ export function isValidCoordinate(longitude: unknown, latitude: unknown): boolea
     && longitude >= -180 && longitude <= 180
     && typeof latitude === 'number' && Number.isFinite(latitude)
     && latitude >= -90 && latitude <= 90;
-}
-
-export function isValidDate(value: unknown): value is string {
-  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const time = Date.parse(`${value}T00:00:00.000Z`);
-  return Number.isFinite(time) && new Date(time).toISOString().slice(0, 10) === value;
 }
 
 function cross(a: Point, b: Point, c: Point): number {
@@ -103,14 +99,7 @@ export function validatePolygon(value: unknown): asserts value is Polygon {
 export function validateSearchQuery(value: unknown): asserts value is SearchQuery {
   if (!isRecord(value)) throw new Error('Search query must be an object.');
   if (value.selection !== null) validatePolygon(value.selection);
-  if (!isRecord(value.filters)) throw new Error('Search filters must be an object.');
-  const { biome, dateFrom, dateTo } = value.filters;
-  if (biome !== null && !isNonemptyString(biome)) throw new Error('Biome must be a nonempty string or null.');
-  if (dateFrom !== null && !isValidDate(dateFrom)) throw new Error('Start date must be a valid YYYY-MM-DD date or null.');
-  if (dateTo !== null && !isValidDate(dateTo)) throw new Error('End date must be a valid YYYY-MM-DD date or null.');
-  if (typeof dateFrom === 'string' && typeof dateTo === 'string' && dateFrom > dateTo) {
-    throw new Error('Start date must be on or before the end date.');
-  }
+  validateFilters(value.filters);
   if (!Number.isSafeInteger(value.offset) || (value.offset as number) < 0) {
     throw new Error('Search offset must be a nonnegative integer.');
   }
@@ -125,6 +114,25 @@ export function validateSample(value: unknown): asserts value is Sample {
     || !isValidCoordinate(value.longitude, value.latitude)
     || (value.collectionDate !== null && !isValidDate(value.collectionDate))) {
     throw new Error('A sample must have an accession, title, biome, valid coordinates and a valid collection date or null.');
+  }
+  if (value.assemblies !== undefined) {
+    if (!Array.isArray(value.assemblies)) throw new Error('Sample assemblies must be an array.');
+    const accessions = new Set<string>();
+    for (const assembly of value.assemblies) {
+      if (!isRecord(assembly) || !isNonemptyString(assembly.accession)
+        || (assembly.contigN50Bp !== null && (typeof assembly.contigN50Bp !== 'number'
+          || !Number.isSafeInteger(assembly.contigN50Bp) || assembly.contigN50Bp < 1))
+        || !Array.isArray(assembly.taxa)) throw new Error('Assembly evidence requires an accession, positive integer contigN50Bp or null, and taxa.');
+      if (accessions.has(assembly.accession)) throw new Error('Assembly evidence accessions must be unique within a sample.');
+      accessions.add(assembly.accession);
+      for (const taxon of assembly.taxa) {
+        if (!isRecord(taxon) || !isTaxonId(taxon.id)
+          || (taxon.label !== undefined && !isNonemptyString(taxon.label))
+          || (taxon.ancestorIds !== undefined && (!Array.isArray(taxon.ancestorIds) || !taxon.ancestorIds.every(isTaxonId)))) {
+          throw new Error('Taxon evidence requires namespaced identifiers and optional label and ancestorIds.');
+        }
+      }
+    }
   }
   if (value.sourceUrl !== undefined) {
     let validUrl = false;

@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 
 export default defineConfig({
   testDir: './tests',
-  testMatch: 'browser.spec.ts',
+  testMatch: ['browser.spec.ts', 'filters.browser.spec.ts'],
   timeout: 30_000,
   expect: { timeout: 10_000 },
   workers: 1,

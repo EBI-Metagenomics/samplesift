@@ -1,4 +1,40 @@
-import type { Sample } from '../types';
+import type { AssemblyEvidence, Sample, TaxonEvidence } from '../types';
+
+// NCBI taxon identities are real; their occurrence in these samples is entirely synthetic.
+const demoTaxa: TaxonEvidence[] = [
+  { id: 'ncbi:2', label: 'Bacteria', ancestorIds: [] },
+  { id: 'ncbi:562', label: 'Escherichia coli', ancestorIds: ['ncbi:2', 'ncbi:561'] },
+  { id: 'ncbi:287', label: 'Pseudomonas aeruginosa', ancestorIds: ['ncbi:2', 'ncbi:286'] },
+  { id: 'ncbi:2157', label: 'Archaea', ancestorIds: [] },
+  { id: 'ncbi:2759', label: 'Eukaryota', ancestorIds: [] },
+  { id: 'ncbi:561', label: 'Escherichia', ancestorIds: ['ncbi:2'] },
+];
+const demoN50Bp = [1_500, 10_000, 25_000, 50_000, 100_000, 250_000];
+
+function createDemoAssemblies(index: number): AssemblyEvidence[] | undefined {
+  if (index % 11 === 0) return undefined;
+  if (index % 13 === 0) return [];
+  const accession = `DEMO-${String(index).padStart(4, '0')}`;
+  const primaryTaxon = (index - 1) % demoTaxa.length;
+  const n50Index = Math.floor((index - 1) / demoTaxa.length) % demoN50Bp.length;
+  const assemblies: AssemblyEvidence[] = [{
+    accession: `${accession}-ASM-1`,
+    contigN50Bp: index % 7 === 0 ? null : demoN50Bp[n50Index],
+    taxa: [structuredClone(demoTaxa[primaryTaxon])],
+  }];
+  if (index % 5 === 0) {
+    assemblies[0].taxa.push(structuredClone(demoTaxa[(primaryTaxon + 1) % demoTaxa.length]));
+  }
+  if (index % 4 === 0) {
+    assemblies.push({
+      accession: `${accession}-ASM-2`,
+      contigN50Bp: demoN50Bp[(n50Index + 2) % demoN50Bp.length],
+      taxa: [structuredClone(demoTaxa[(primaryTaxon + 2) % demoTaxa.length])],
+    });
+  }
+  return assemblies;
+}
+
 
 /** Synthetic illustration only: these identifiers and records do not refer to real samples. */
 export function createDemoSamples(): Sample[] {
@@ -29,6 +65,7 @@ export function createDemoSamples(): Sample[] {
       latitude: Number((cluster.latitude + (random() * 2 - 1) * cluster.spreadY).toFixed(5)),
       biome: cluster.biome,
       collectionDate: index % 9 === 0 ? null : `${year}-${month}-${day}`,
+      assemblies: createDemoAssemblies(index),
     };
   }));
 }

@@ -296,7 +296,7 @@ export class SampleSiftMap extends LitElement {
     if (!sample) return;
     this.selectSample(sample.accession);
     this.dispatchEvent(new CustomEvent<SampleClickDetail>('sampleclick', {
-      detail: { accession: sample.accession, sample: { ...sample } }, bubbles: true, composed: true,
+      detail: { accession: sample.accession, sample: structuredClone(sample) }, bubbles: true, composed: true,
     }));
   };
 

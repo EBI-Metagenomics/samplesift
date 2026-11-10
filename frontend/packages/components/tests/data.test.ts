@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Polygon } from 'geojson';
 import type { Sample, SearchQuery, SearchResult } from '../src/types';
+import { EMPTY_FILTERS } from '../src/types';
 import { createDemoSamples, createFixtureDataSource, createHttpDataSource, validatePolygon } from '../src/data';
 
 const square: Polygon = { type: 'Polygon', coordinates: [[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]]] };
@@ -9,7 +10,7 @@ const sample = (accession: string, overrides: Partial<Sample> = {}): Sample => (
   biome: 'Marine', collectionDate: '2020-06-01', ...overrides,
 });
 const query = (overrides: Partial<SearchQuery> = {}): SearchQuery => ({
-  selection: null, filters: { biome: null, dateFrom: null, dateTo: null }, offset: 0, limit: 20, ...overrides,
+  selection: null, filters: { ...EMPTY_FILTERS, biome: null, dateFrom: null, dateTo: null }, offset: 0, limit: 20, ...overrides,
 });
 const options = () => ({ signal: new AbortController().signal });
 
@@ -37,13 +38,13 @@ describe('fixture data source', () => {
   it('ANDs spatial, biome and inclusive date ranges and excludes unknown dates when a range is active', async () => {
     const source = createFixtureDataSource(samples);
     const result = await source.search(query({
-      selection: square, filters: { biome: 'Marine', dateFrom: '2020-01-01', dateTo: '2020-12-31' },
+      selection: square, filters: { ...EMPTY_FILTERS, biome: 'Marine', dateFrom: '2020-01-01', dateTo: '2020-12-31' },
     }), options());
     expect(result.items.map(({ accession }) => accession)).toEqual(['A', 'C']);
     expect(result.facets.biomes).toEqual([{ value: 'Marine', count: 2 }]);
-    const lowerBound = await source.search(query({ filters: { biome: null, dateFrom: '2020-06-01', dateTo: null } }), options());
+    const lowerBound = await source.search(query({ filters: { ...EMPTY_FILTERS, biome: null, dateFrom: '2020-06-01', dateTo: null } }), options());
     expect(lowerBound.items.map(({ accession }) => accession)).toEqual(['B', 'C', 'E']);
-    const upperBound = await source.search(query({ filters: { biome: null, dateFrom: null, dateTo: '2020-01-01' } }), options());
+    const upperBound = await source.search(query({ filters: { ...EMPTY_FILTERS, biome: null, dateFrom: null, dateTo: '2020-01-01' } }), options());
     expect(upperBound.items.map(({ accession }) => accession)).toEqual(['A']);
   });
 
@@ -59,8 +60,8 @@ describe('fixture data source', () => {
 
   it('rejects invalid dates, inverted ranges, fractional pagination and invalid coordinates', async () => {
     const source = createFixtureDataSource(samples);
-    await expect(source.search(query({ filters: { biome: null, dateFrom: '2023-02-29', dateTo: null } }), options())).rejects.toThrow('valid YYYY-MM-DD');
-    await expect(source.search(query({ filters: { biome: null, dateFrom: '2021-01-01', dateTo: '2020-01-01' } }), options())).rejects.toThrow('on or before');
+    await expect(source.search(query({ filters: { ...EMPTY_FILTERS, biome: null, dateFrom: '2023-02-29', dateTo: null } }), options())).rejects.toThrow('valid YYYY-MM-DD');
+    await expect(source.search(query({ filters: { ...EMPTY_FILTERS, biome: null, dateFrom: '2021-01-01', dateTo: '2020-01-01' } }), options())).rejects.toThrow('on or before');
     await expect(source.search(query({ offset: 0.5 }), options())).rejects.toThrow('offset');
     await expect(source.search(query({ limit: 0 }), options())).rejects.toThrow('limit');
     expect(() => createFixtureDataSource([sample('bad', { longitude: 181 })])).toThrow('valid coordinates');
@@ -90,7 +91,7 @@ describe('fixture data source', () => {
   it('captures a delayed query and isolates results from mutation', async () => {
     vi.useFakeTimers();
     const source = createFixtureDataSource(samples, { latencyMs: 50 });
-    const request = query({ filters: { biome: 'Soil', dateFrom: null, dateTo: null } });
+    const request = query({ filters: { ...EMPTY_FILTERS, biome: 'Soil', dateFrom: null, dateTo: null } });
     const pending = source.search(request, options());
     request.filters.biome = 'Marine';
     await vi.advanceTimersByTimeAsync(50);

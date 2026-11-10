@@ -1,181 +1,270 @@
-# SampleSift widget
+# SampleSift components
 
-A reusable spatial sample explorer built with Lit, MapLibre GL JS, and Terra Draw. `<sample-sift>` combines a map, rectangle/polygon selection, biome/date filters, a result count, and a paginated sample table. `<sample-sift-map>` is the smaller map-only component.
+`<sample-sift>` is a reusable browser explorer built with Lit, MapLibre GL JS, and Terra Draw. It combines rectangle/polygon selection, assembly contig N50 and taxonomy filters, optional biome/date controls, a distinct-sample count, and a paginated table. `<sample-sift-map>` supplies the map alone.
 
-This is a browser component prototype. The explicit `demo` mode uses **synthetic samples**, not live MGnify records. The HTTP adapter defines a proposed SampleSift API contract; a matching server is not included.
+This is a frontend prototype. Explicit `demo` mode uses **synthetic samples, assembly metrics, and taxonomic annotations**. A real MGnify backend is not included, and the API below remains a proposed SampleSift contract.
 
-## Run locally
+## Develop and build
 
-Use Node.js 22.12 or newer and npm:
+Use Node.js 22.12 or newer. From the repository's `frontend/` directory:
 
 ```sh
-npm install
+npm ci
 npm run dev
-```
-
-Open the URL printed by Vite. Build and check the package with:
-
-```sh
+npm run lint
 npm run build
 npm test
 npx playwright install chromium
 npm run test:browser
 ```
 
-If Google Chrome is already installed, `PLAYWRIGHT_CHANNEL=chrome npm run test:browser` uses that browser instead of a separately downloaded Chromium.
+If Chrome is already installed, `PLAYWRIGHT_CHANNEL=chrome npm run test:browser` can use it instead of downloading Chromium. These are verification commands, not a claim that they have been run in your environment.
 
-`npm run build` performs TypeScript checking and creates browser ES modules plus TypeScript declarations in `dist/`. `npm test` runs the data/geometry unit tests. Browser tests exercise independent component instances, filtering/pagination, spatial selection, asynchronous responses, and reconnecting the same element. They use a tile-free map style and deterministic test data.
+The development server exposes the main synthetic demo, `/demo/contract.html` with two independent components, and `/demo/url-state.html` with host-managed URL state for `left` and `right` instances. The latter's integration code is in [demo/url-state.ts](demo/url-state.ts).
 
-For a quick check of the built package, run `npm run preview` after building and open `/embed.html` on the printed URL. This is a plain HTML consumer of the distributable, including its worker assets. `/demo/contract.html` on the development server demonstrates two independent components with a tile-free background.
+`npm run build` checks TypeScript and writes ES modules, declarations, and worker assets to `packages/components/dist/`. Run `npm run preview` and open `/embed.html` to inspect a plain HTML consumer of the build.
 
-If Google Chrome is already installed, you can run browser tests with `PLAYWRIGHT_CHANNEL=chrome npm run test:browser` instead of downloading Playwright's Chromium build.
+## Embed
 
-## Use in an HTML page
-
-Serve the complete `dist/` directory over HTTP, retaining its relative file layout:
+Serve the complete `dist/` directory over HTTP, preserving its relative file layout:
 
 ```html
 <script type="module" src="/sample-sift/sample-sift.js"></script>
-
-<!-- Explicitly opt in to synthetic demo records. -->
 <sample-sift demo page-size="25"></sample-sift>
 ```
 
-The bundle registers both custom elements and includes their component styles inside Shadow DOM. There is no separate application stylesheet to install. Its ES-module dependencies must remain alongside it in the distributed `dist/` directory.
+Both custom elements register on import. Their styles are contained in Shadow DOM; keep the emitted JavaScript chunks and worker assets together. Browser DOM and WebGL support are required; server-side rendering is outside this prototype's scope.
 
-For a real backend, omit `demo` and provide the API base URL:
+A bundler-based host can install the local workspace package and import `@samplesift/components`. This repository does not imply that the package has been published to a registry.
+
+For a backend that implements the query transport described below:
 
 ```html
 <sample-sift api-url="https://samples.example.org/api" page-size="25"></sample-sift>
 ```
 
-The API must allow requests from the page's origin when hosted elsewhere. Without `demo`, `api-url`, or a `dataSource` property, the explorer displays setup guidance instead of silently showing fixture data.
+Without `demo`, `api-url`, or a `dataSource` property, the component shows setup guidance. An explicitly assigned `dataSource` takes precedence over `api-url` and `demo`. A remote API must allow requests from the host page's origin.
 
-For a bundler-based application, install this local package and import it:
+## Configure the controls and filters
+
+Assign arrays and objects as JavaScript properties:
 
 ```js
 import '@samplesift/components';
-```
+import { EMPTY_FILTERS, normalizeFilters } from '@samplesift/components/data';
 
-This repository is not a claim that `@samplesift/components` has been published to a package registry. The component needs browser DOM and WebGL support; server-side rendering is not part of this prototype.
-
-## Custom data source
-
-Assign JavaScript objects and geometry through properties or methods, rather than stringifying them into HTML attributes:
-
-```js
-const explorer = document.querySelector('sample-sift');
 await customElements.whenDefined('sample-sift');
+const explorer = document.querySelector('sample-sift');
 
-explorer.dataSource = {
-  async search(query, { signal }) {
-    const response = await fetch('/api/samples/search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(query),
-      signal,
-    });
-    if (!response.ok) throw new Error(`Search failed (${response.status})`);
-    return response.json();
-  },
-};
+// Default: all four supported groups, in this order.
+explorer.filterFields = ['n50', 'taxonomy', 'biome', 'collectionDate'];
+
+// These are suggestions; users may enter another namespaced identifier.
+explorer.taxonomyOptions = [
+  { id: 'ncbi:2', label: 'Bacteria' },
+  { id: 'ncbi:562', label: 'Escherichia coli' },
+];
+explorer.setFilters(normalizeFilters({ n50MinBp: 50000, taxonId: 'ncbi:2', includeDescendants: true }));
+
+// Clear all filters without changing the selected region.
+explorer.setFilters({ ...EMPTY_FILTERS });
 ```
 
-Implement the exported `SampleDataSource` interface for other backends. Data adapters are also exposed through the separate `@samplesift/components/data` entry point, so data-only consumers do not need to import the map component.
+`FilterField` is the fixed union `'n50' | 'taxonomy' | 'biome' | 'collectionDate'`. To retain the original controls alone, use `['biome', 'collectionDate']`; for assembly-focused embeds, use `['n50', 'taxonomy']`. Hiding a control does not clear its active filter. The component identifies active filters whose controls are hidden, and **Clear filters** resets all groups.
+
+`taxonomyOptions` is a local suggestion list, not a remote autocomplete service or taxonomy resolver. Labels help users choose IDs; filtering uses the namespaced ID, such as `ncbi:562` or `gtdb:RS_GCF_000005845.2`.
+
+`SampleFilters` has seven required fields. `EMPTY_FILTERS` is a frozen default object with `null` values and `includeDescendants: false`; spread it when constructing a mutable object. `normalizeFilters(partial)` fills defaults and validates values. Unsupported filter names, invalid dates, nonpositive/fractional N50 bounds, and inverted ranges are rejected.
+
+Valid user edits commit on the control's `change` event, normally blur for text/number inputs and immediate change for selects/checkboxes. A commit emits `filterschange` with `{ filters }` before the API request succeeds or fails. Invalid drafts show an error and prevent a broader query; they do not emit a valid-filter event.
+
+## Assembly evidence and matching semantics
+
+A sample may include `assemblies: AssemblyEvidence[]`. Each evidence record has a unique accession within that sample, `contigN50Bp: number | null`, and `taxa: TaxonEvidence[]`:
+
+```json
+{
+  "accession": "SAMPLE-001",
+  "title": "Example sample",
+  "longitude": -5.2,
+  "latitude": 36.1,
+  "biome": "Marine",
+  "collectionDate": "2024-06-15",
+  "assemblies": [
+    {
+      "accession": "ASSEMBLY-001",
+      "contigN50Bp": 50000,
+      "taxa": [
+        { "id": "ncbi:562", "label": "Escherichia coli", "ancestorIds": ["ncbi:2", "ncbi:561"] }
+      ]
+    }
+  ]
+}
+```
+
+Contig N50 bounds are **inclusive positive integers in base pairs**. Unknown N50 is excluded only when an N50 bound is active. Taxonomy means a detected taxon in the adapter's declared assembly analysis profile; it does not mean the sample's host organism or automatically the taxon assigned to a genome. Adapters must document their profile/reference source and provenance.
+
+Taxonomy matching is exact by default. With `includeDescendants: true`, an observation also matches when its `ancestorIds` contains the requested ID. Labels are never searched. Missing lineage must be resolved by the backend or adapter; the widget does not guess it.
+
+When N50 and taxonomy are both active, **one AssemblyEvidence record must satisfy both**. A high-N50 assembly with the wrong taxon cannot be combined with a different low-N50 assembly containing the requested taxon. Any qualifying assembly includes its sample once, regardless of how many assemblies or taxa match. Missing assembly/taxon evidence cannot satisfy an active corresponding constraint. Without assembly constraints, samples without assemblies remain eligible.
+
+Spatial, biome, and collection-date filters are ANDed with assembly constraints. Biomes match exactly; date boundaries are inclusive. Unknown dates are excluded while a date constraint is active. Polygon boundaries are included. Normalize real source metadata without inventing exact dates from coarse or missing dates.
+
+## Data adapters and HTTP transport
+
+The `@samplesift/components/data` entry exports adapters, validation/filter helpers, URL helpers, `EMPTY_FILTERS`, and public data types without importing the map component:
 
 ```js
 import { createFixtureDataSource, createHttpDataSource } from '@samplesift/components/data';
 
-// Use your own normalized Sample[] collection locally.
+// A caller-provided collection of normalized Sample records.
 explorer.dataSource = createFixtureDataSource(samples);
 
-// Or use the included HTTP adapter, which validates responses.
-explorer.dataSource = createHttpDataSource({ baseUrl: 'https://samples.example.org/api' });
+// Recommended explicit transport for a compatible backend.
+explorer.dataSource = createHttpDataSource({
+  baseUrl: 'https://samples.example.org/api',
+  filterTransport: 'query',
+  parameterNames: { n50MinBp: 'minimum_contig_n50' }, // Optional fixed-field mapping.
+});
 ```
 
-Search is triggered when a region or filter changes, or when the result page changes. Map panning is independent of the selected region. Each component instance owns its own selection, filters, and requests. New searches cancel previous requests when supported by the data source, and older responses cannot overwrite newer results.
+`api-url` uses **query transport**. The factory `createHttpDataSource()` retains **JSON transport as its default** for compatibility, so select `filterTransport: 'query'` explicitly when needed. `parameterNames` may rename only the seven supported filter fields; names must be valid, unique, and cannot reuse reserved body fields. This mapping does not add arbitrary filter types or change host URL namespaces.
 
-## Proposed HTTP contract
+For query transport, the adapter sends `POST {baseUrl}/samples/search` with active filters in the URL:
 
-The HTTP adapter sends `POST {baseUrl}/samples/search` with a JSON `SearchQuery`:
+```text
+/api/samples/search?contig_n50_min=50000&taxon_id=ncbi%3A2&include_descendants=true
+```
+
+Geometry and pagination remain in the JSON body:
+
+```json
+{ "selection": null, "offset": 0, "limit": 25 }
+```
+
+Default parameter names are listed below. Null filters and `includeDescendants: false` are omitted; clearing a filter removes its mapped query parameter. Unrelated base-URL query parameters are preserved.
+
+| Filter field | API query name | Host URL key for namespace `left` |
+| --- | --- | --- |
+| `n50MinBp` | `contig_n50_min` | `sf.left.contig_n50_min` |
+| `n50MaxBp` | `contig_n50_max` | `sf.left.contig_n50_max` |
+| `taxonId` | `taxon_id` | `sf.left.taxon_id` |
+| `includeDescendants` | `include_descendants` | `sf.left.include_descendants` |
+| `biome` | `biome` | `sf.left.biome` |
+| `dateFrom` | `date_from` | `sf.left.date_from` |
+| `dateTo` | `date_to` | `sf.left.date_to` |
+
+JSON transport sends the complete `SearchQuery` in the POST body instead:
 
 ```json
 {
   "selection": null,
-  "filters": { "biome": null, "dateFrom": null, "dateTo": null },
+  "filters": {
+    "biome": null, "dateFrom": null, "dateTo": null,
+    "n50MinBp": 50000, "n50MaxBp": null,
+    "taxonId": "ncbi:2", "includeDescendants": true
+  },
   "offset": 0,
   "limit": 25
 }
 ```
 
-`selection` is either `null` or a GeoJSON `Polygon` using `[longitude, latitude]` coordinates. `null` means no spatial filter. Filter dates use `YYYY-MM-DD` strings or `null`. Return a `SearchResult`:
+Both transports expect `SearchResult`: `{ items: Sample[], total: number, facets: { biomes: [{ value: string, count: number }] } }`. Counts describe the complete, fully filtered set of **distinct samples before pagination**. Only the current `items` page is drawn on the map. `collectionDate` may be `null`, `sourceUrl` is optional and must be absolute HTTP(S), and `assemblies` is optional. The included HTTP adapter validates responses.
 
-```json
-{
-  "items": [
-    {
-      "accession": "SAMPLE-001",
-      "title": "Example sample",
-      "longitude": -5.2,
-      "latitude": 36.1,
-      "biome": "Marine",
-      "collectionDate": "2024-06-15",
-      "sourceUrl": "https://example.org/samples/SAMPLE-001"
-    }
-  ],
-  "total": 1,
-  "facets": { "biomes": [{ "value": "Marine", "count": 1 }] }
-}
+For a different service, implement `SampleDataSource.search(query, { signal }): Promise<SearchResult>`. Honor cancellation when possible. New requests supersede older responses. The fixture adapter snapshots nested input, requests, and results to prevent caller mutations from affecting later searches.
+
+`selection` is `null` or a GeoJSON `Polygon` in `[longitude, latitude]` order. Supported polygons are closed, simple, single-ring shapes with 3–1000 vertices; holes and antimeridian-crossing edges are rejected. This API is SampleSift's proposed contract, not MGnify's public API. A backend must acquire and normalize MGnify evidence before serving it.
+
+## Optional URL state belongs to the host
+
+Neither custom element reads `window.location`, updates browser history, nor enables URL synchronization by default. The `/data` helpers are pure: they work on supplied `URLSearchParams` and do not access `window`, a router, or history.
+
+- `serializeApiFilters(filters, parameterNames?)` returns unprefixed API parameters.
+- `createFilterQueryPatch(filters, { namespace })` returns changes for one instance's seven owned URL keys; `null` means delete.
+- `applyFilterQueryPatch(currentParams, patch)` returns a new `URLSearchParams` with those changes applied.
+- `readFilterQuery(params, { namespace })` reads that namespace's known keys and fills defaults. Malformed values or duplicate owned keys throw.
+
+Use separate namespaces such as `left` and `right` for multiple widgets. Namespaces accept 1–64 letters, digits, underscores, or hyphens. The patch helper preserves unrelated parameters, future/unknown keys, and duplicate values for unrelated keys. It does not promise byte-for-byte URL preservation: `URLSearchParams` serialization can normalize encoding. Only filters are handled; selection geometry and pagination are not automatically serialized into the host page URL.
+
+The host must apply each patch to its **latest** URL/router state, preserve existing history metadata, and restore filters on back/forward navigation. Invalid URL filters must show an error and prevent searching with silently relaxed defaults. This minimal plain-page example mounts only after a valid restore; an invalid back/forward state detaches the component and aborts its active search:
+
+```html
+<p id="url-error" role="alert"></p>
+<div id="explorer-slot"></div>
 ```
-
-`items` contains the requested page, while `total` is the count before pagination. `collectionDate` may be `null`; `sourceUrl` is optional. The browser receives and draws the current page of samples, not every matching record. A large total therefore does not imply that all matching locations are displayed.
-
-The fixture adapter combines filters with AND, uses an exact biome match and inclusive date boundaries, and includes points on polygon boundaries. Unknown collection dates match only when no date range is applied. Biome facet counts describe the fully filtered result set before pagination. HTTP backends should use the same semantics. Preserve coarse or missing source dates when normalizing real data; do not invent an exact collection day.
-
-Selections must be closed, simple polygons with one outer ring and 3–1000 vertices. Holes, self-intersections, and antimeridian-crossing edges are rejected in this version.
-
-This contract belongs to SampleSift, not MGnify's public API. A future server or custom adapter must acquire and normalize MGnify metadata before serving this shape.
-
-## Methods, events, and map style
 
 ```js
-explorer.setFilters({ biome: 'Marine', dateFrom: '2024-01-01' });
-explorer.setSelection({
-  type: 'Polygon',
-  coordinates: [[[-10, 30], [10, 30], [10, 50], [-10, 50], [-10, 30]]],
-});
-explorer.clearSelection();
-explorer.refresh();
+import '@samplesift/components';
+import {
+  createHttpDataSource, readFilterQuery,
+  createFilterQueryPatch, applyFilterQueryPatch,
+} from '@samplesift/components/data';
 
-explorer.addEventListener('selectionchange', event => {
-  console.log(event.detail.geometry); // Polygon or null
+const namespace = 'left';
+const slot = document.querySelector('#explorer-slot');
+const error = document.querySelector('#url-error');
+const explorer = document.createElement('sample-sift');
+explorer.dataSource = createHttpDataSource({ baseUrl: '/api', filterTransport: 'query' });
+
+function restore() {
+  try {
+    const filters = readFilterQuery(new URL(location.href).searchParams, { namespace });
+    explorer.setSearchState({ filters });
+    error.textContent = '';
+    if (!explorer.isConnected) slot.append(explorer);
+  } catch (cause) {
+    explorer.remove();
+    error.textContent = cause instanceof Error ? cause.message : 'Invalid URL filters.';
+  }
+}
+explorer.addEventListener('filterschange', (event) => {
+  const latest = new URL(location.href);
+  const patch = createFilterQueryPatch(event.detail.filters, { namespace });
+  latest.search = applyFilterQueryPatch(latest.searchParams, patch).toString();
+  history.pushState(history.state, '', latest); // Keep existing history metadata.
 });
-explorer.addEventListener('resultschange', event => {
-  console.log(event.detail.query, event.detail.result);
-});
-explorer.addEventListener('sampleclick', event => {
-  console.log(event.detail.accession, event.detail.sample);
-});
-explorer.addEventListener('searcherror', event => {
-  console.error(event.detail.message);
-});
+window.addEventListener('popstate', restore);
+restore();
 ```
 
-All four events bubble and cross the Shadow DOM boundary. `selectionchange` reports user actions from the drawing tools and their Clear button. Programmatic `setSelection()` and `clearSelection()` update the query without emitting `selectionchange`, avoiding host feedback loops. Successful searches still emit `resultschange`. `setFilters()` merges the supplied fields with the current filters; pass `null` to clear an individual field. Selection and filter changes reset pagination.
+For an application router, perform the same read/patch/restore steps through its navigation API instead of calling `history` directly. Remove host listeners when disposing the integration. See `/demo/url-state.html` and [its source](demo/url-state.ts) for two synthetic instances with independent namespaces.
 
-Set `mapStyle` to a MapLibre style URL or style object. The explorer forwards it to its child map. For a local, tile-free background:
+## Methods and events
+
+| Method | Behavior |
+| --- | --- |
+| `setFilters(partial)` | Validate and merge fields, preserve selection, reset pagination. |
+| `setSearchState({ filters?, selection? })` | Validate and apply merged filters and optional geometry atomically, resetting pagination. |
+| `setSelection(polygonOrNull)` | Set the region and reset pagination. |
+| `clearSelection()` | Remove the region and reset pagination. |
+| `refresh()` | Repeat the current query. |
+
+Programmatic setters are silent: they do not emit `filterschange` or `selectionchange`. Pass `null` to clear a nullable filter and `false` to disable descendant matching. `setSearchState()` supports restoring a host-owned search without separate filter/geometry requests.
+
+All public events bubble and cross Shadow DOM:
+
+| Event | Detail and trigger |
+| --- | --- |
+| `filterschange` | `{ filters }`; valid user commits and Clear filters, before network success. |
+| `selectionchange` | `{ geometry }`; user drawing/clearing a region. |
+| `resultschange` | `{ query, result }`; successful current search, including programmatic changes. |
+| `sampleclick` | `{ accession, sample }`; user selects a map point or table sample. |
+| `searcherror` | `{ message }`; current search failure. |
+
+Panning the map does not change the selected region or issue a search. Each component owns its selection, filters, pagination, and requests.
+
+## Map style and map-only use
+
+Set `explorer.mapStyle` to a MapLibre style URL or style object; it is forwarded to the child map. To use a tile-free background:
 
 ```js
 explorer.mapStyle = {
-  version: 8,
-  sources: {},
+  version: 8, sources: {},
   layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#eef2f3' } }],
 };
 ```
 
-Production deployments should supply an appropriate basemap and retain its required attribution. Changing a map style does not change the sample data source.
-
-For a host application that owns its filters and results UI, use the map alone:
+Production hosts should choose an appropriate basemap and retain its required attribution. Changing the style does not change the sample data source.
 
 ```html
 <sample-sift-map id="selection-map" style="height: 420px"></sample-sift-map>
@@ -183,18 +272,15 @@ For a host application that owns its filters and results UI, use the map alone:
 
 ```js
 const map = document.querySelector('#selection-map');
-await customElements.whenDefined('sample-sift-map');
-map.samples = samples;           // Sample[] to draw
-map.selection = null;            // Polygon | null; assignment does not emit an event
-map.setMode('rectangle');        // 'rectangle', 'polygon', or 'select'
-map.fitSamples();                // fit the current sample page
-map.selectSample('SAMPLE-001');  // highlight without issuing a search
+map.samples = samples;
+map.selection = null; // Property assignment is silent.
+map.setMode('rectangle'); // 'rectangle', 'polygon', or 'select'
+map.fitSamples(); // Fit only the current sample page.
+map.selectSample('SAMPLE-001'); // Highlight without searching.
 map.addEventListener('selectionchange', event => console.log(event.detail.geometry));
 map.addEventListener('sampleclick', event => console.log(event.detail.sample));
 ```
 
-## Scope
+## Limits
 
-Implemented here: a reusable browser component, rectangle and click-to-draw polygon selection, biome/date filtering, pagination, a data-source interface, synthetic demonstration data, and a proposed HTTP adapter.
-
-Not included: a Django/PostGIS backend, a real MGnify import, taxonomy filtering, freehand drawing, a sample vector-tile service, PGlite, or a verified 100k-record performance result. The browser map uses MapLibre rather than the earlier Leaflet proposal. Dependency licenses remain their own; a project license has not yet been selected for this prototype.
+The implementation supports these four filter groups, local taxonomy suggestions, pure URL helpers, reusable components, and synthetic demonstration data. It does not include a live MGnify import/backend, remote taxonomy autocomplete or lineage resolution, freehand drawing, a sample vector-tile service, PGlite, or a verified 100k-record performance result. MapLibre replaces the earlier Leaflet proposal. Dependency licenses remain their own; a project license has not yet been selected for this prototype.
