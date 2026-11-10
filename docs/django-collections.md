@@ -51,7 +51,7 @@ Their names are `samplesift_<source_model_snake_case>_collection` (for example,
 `samplesift_django`. If source model names collide across applications, set a
 unique lowercase `Meta.table_name` explicitly.
 
-Every row has a `source_pk` string primary key. Consequently, one collection
+Every row has a `source_pk` string primary key with a maximum length of 255 characters. Consequently, one collection
 must receive data from exactly one source database alias. A collection's source
 alias comes from `Meta.database`; it defaults to `default`.
 
@@ -180,12 +180,12 @@ Each API collection has discovery and two static `QUERY` endpoints:
 - `GET /samplesift/collections/{api_name}/queryables` returns a JSON Schema document
   describing public queryables and their supported operators.
 - `QUERY /samplesift/collections/{api_name}/tiles/{z}/{x}/{y}` returns a Mapbox Vector Tile.
-  Through zoom 14 it groups filtered points by proximity in Web Mercator using
+  By default, through zoom 14 it groups filtered points by proximity in Web Mercator using
   PostGIS DBSCAN with a 40-pixel distance and a minimum of one point. Connected
   chains of nearby points form one cluster, so a cluster can span more than 40
   pixels. Clustering considers the entire filtered collection before selecting
   cluster centroids for a tile, ensuring adjacent tiles agree on membership. This
-  can be expensive for large collections. At zoom 15 and above it returns
+  can be expensive for large collections. By default, at zoom 15 and above it returns
   individual points. Cluster IDs depend on membership and are not permanent.
 - `QUERY /samplesift/collections/{api_name}/results` returns individual rows selected only by the body
   filters, ordering, and pagination; it is independent of map bounds.
@@ -250,3 +250,23 @@ Spatial collection indexes use Django's PostgreSQL `GistIndex`; creating and
 registering a spatial collection therefore requires Django's PostgreSQL support
 and its database driver as well as the PostGIS database. Add
 `django.contrib.postgres` to `INSTALLED_APPS` for spatial collections.
+
+## API settings
+
+SampleSift validates these global Django settings at startup. Configure them before
+starting the application; restart after changing them. Defaults preserve the
+standard API behavior.
+
+| Setting | Default | Constraint |
+| --- | ---: | --- |
+| `SAMPLESIFT_FILTER_MAX_DEPTH` | 20 | Non-negative integer |
+| `SAMPLESIFT_FILTER_MAX_NODES` | 500 | Positive integer |
+| `SAMPLESIFT_DEFAULT_PAGE_SIZE` | 100 | Positive integer, no greater than the maximum page size |
+| `SAMPLESIFT_MAX_PAGE_SIZE` | 500 | Positive integer |
+| `SAMPLESIFT_CLUSTER_RADIUS_PIXELS` | 40 | Positive integer |
+| `SAMPLESIFT_CLUSTER_MAX_ZOOM` | 14 | Non-negative integer |
+
+Filter depth starts at zero; the node limit counts all objects, arrays, and
+scalar values in the expression. The clustering radius is measured in pixels;
+clustering applies through the configured maximum zoom, inclusive. Increasing
+filter or page limits can increase resource use.

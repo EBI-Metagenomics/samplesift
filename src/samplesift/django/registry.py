@@ -11,6 +11,7 @@ from django.core.exceptions import ImproperlyConfigured
 from django.db import connections, models, transaction
 from django.db.models.signals import post_delete, post_save
 
+from .constants import SOURCE_PK_MAX_LENGTH
 from .models import SampleSiftCollection
 
 logger = logging.getLogger(__name__)
@@ -95,7 +96,7 @@ class CollectionRegistry:
         if collection not in self._models:
             attributes: dict[str, Any] = {
                 "__module__": collection.__module__,
-                "source_pk": models.CharField(max_length=255, primary_key=True),
+                "source_pk": models.CharField(max_length=SOURCE_PK_MAX_LENGTH, primary_key=True),
             }
             attributes.update(collection.collection_fields())
             meta_attributes: dict[str, Any] = {

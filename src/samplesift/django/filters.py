@@ -10,10 +10,15 @@ from django.db.models import Q
 from pygeofilter import ast, values
 from pygeofilter.parsers.cql2_json import parse
 
+from .config import get_settings
+from .constants import WGS84_SRID
+
 
 def compile_filter(expression: Any, descriptors: dict[str, tuple[Any, str]]) -> Q:
+    config = get_settings()
+
     def shape(node: Any, depth: int = 0) -> int:
-        if depth > 20:
+        if depth > config.filter_max_depth:
             raise ValueError("Filter is too deeply nested.")
         if isinstance(node, dict):
             if "op" in node:
@@ -31,7 +36,7 @@ def compile_filter(expression: Any, descriptors: dict[str, tuple[Any, str]]) -> 
             return 1 + sum(shape(v, depth + 1) for v in node)
         return 1
 
-    if shape(expression) > 500:
+    if shape(expression) > config.filter_max_nodes:
         raise ValueError("Filter is too complex.")
     try:
         parsed = parse(expression)
@@ -90,7 +95,7 @@ def compile_filter(expression: Any, descriptors: dict[str, tuple[Any, str]]) -> 
 
         coordinates(data["coordinates"], 2 if data["type"] == "Polygon" else 3)
         try:
-            geometry = GEOSGeometry(json.dumps(data), srid=4326)
+            geometry = GEOSGeometry(json.dumps(data), srid=WGS84_SRID)
             if geometry.empty or not geometry.valid:
                 raise ValueError("Invalid polygon geometry.")
         except (GEOSException, ValueError, TypeError) as error:

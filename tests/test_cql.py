@@ -62,3 +62,17 @@ def test_nested_cql_respects_nulls() -> None:
 def test_invalid_filters_are_rejected(expression: dict) -> None:
     with pytest.raises(ValueError):
         compile_filter(expression, DESCRIPTORS)
+
+
+def test_filter_limits_can_be_configured(settings) -> None:
+    expression = {"op": "=", "args": [{"property": "score"}, 1]}
+    settings.SAMPLESIFT_FILTER_MAX_DEPTH = 3
+    settings.SAMPLESIFT_FILTER_MAX_NODES = 6
+    compile_filter(expression, DESCRIPTORS)
+    settings.SAMPLESIFT_FILTER_MAX_DEPTH = 2
+    with pytest.raises(ValueError, match="deeply nested"):
+        compile_filter(expression, DESCRIPTORS)
+    settings.SAMPLESIFT_FILTER_MAX_DEPTH = 3
+    settings.SAMPLESIFT_FILTER_MAX_NODES = 5
+    with pytest.raises(ValueError, match="too complex"):
+        compile_filter(expression, DESCRIPTORS)

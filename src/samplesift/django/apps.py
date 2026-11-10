@@ -10,4 +10,7 @@ class SamplesiftDjangoConfig(AppConfig):
     label = "samplesift_django"
 
     def ready(self) -> None:
+        from .config import get_settings
+
+        get_settings()
         autodiscover_modules("samplesift")

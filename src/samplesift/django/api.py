@@ -19,14 +19,11 @@ from ninja.errors import HttpError
 
 from samplesift.query import Queryable
 
+from .config import get_settings
+from .constants import MVT_EXTENT, WEB_MERCATOR_INITIAL_RESOLUTION, WEB_MERCATOR_SRID
 from .filters import compile_filter
 from .models import SampleSiftCollection
 from .registry import registry
-
-MAX_PAGE_SIZE = 500
-DEFAULT_PAGE_SIZE = 100
-CLUSTER_RADIUS_PIXELS = 40
-CLUSTER_MAX_ZOOM = 14
 
 
 def _tile_polygon(z: int, x: int, y: int) -> Any:
@@ -261,6 +258,7 @@ class SamplesiftAPI(NinjaAPI):
         self._collection_paths[tile_path] = collection
 
     def get_openapi_schema(self, **kwargs: Any) -> dict[str, Any]:
+        config = get_settings()
         schema = super().get_openapi_schema(**kwargs)
         schema["openapi"] = "3.2.1"
         components = schema.setdefault("components", {}).setdefault("schemas", {})
@@ -275,7 +273,7 @@ class SamplesiftAPI(NinjaAPI):
                 "properties": {
                     "filter": {"type": "object", "description": "CQL2 JSON expression; s_intersects accepts geometry and a GeoJSON Polygon or MultiPolygon in EPSG:4326."},
                     "sort": {"type": "array", "items": {"type": "string", "enum": [*fields, *[f"-{field}" for field in fields]]}},
-                    "limit": {"type": "integer", "minimum": 1, "maximum": MAX_PAGE_SIZE, "default": DEFAULT_PAGE_SIZE},
+                    "limit": {"type": "integer", "minimum": 1, "maximum": config.max_page_size, "default": config.default_page_size},
                     "offset": {"type": "integer", "minimum": 0},
                     "cursor": {"type": "string"},
                 },
@@ -362,9 +360,10 @@ def _results_for_collection(
     """Return individual rows matching filters for one bound collection."""
     query = _queryset(collection, payload)
     ordering = _ordering(collection, payload)
-    limit = payload.get("limit", DEFAULT_PAGE_SIZE)
-    if not isinstance(limit, int) or not 1 <= limit <= MAX_PAGE_SIZE:
-        raise HttpError(422, f"limit must be between 1 and {MAX_PAGE_SIZE}.")
+    config = get_settings()
+    limit = payload.get("limit", config.default_page_size)
+    if not isinstance(limit, int) or not 1 <= limit <= config.max_page_size:
+        raise HttpError(422, f"limit must be between 1 and {config.max_page_size}.")
     cursor, offset = payload.get("cursor"), payload.get("offset")
     if cursor is not None and offset is not None:
         raise HttpError(422, "cursor and offset cannot be used together.")
@@ -401,25 +400,26 @@ def _mvt(collection: type[SampleSiftCollection], query: QuerySet[models.Model], 
     base_sql, base_params = base.query.sql_with_params()
     quote = connection.ops.quote_name
     selected = ", ".join(quote(field) for field in fields)
-    geometry = "ST_AsMVTGeom(ST_Transform(geometry, 3857), ST_TileEnvelope(%s, %s, %s), 4096, 0, true) AS geom"
-    if z > CLUSTER_MAX_ZOOM:
+    config = get_settings()
+    geometry = f"ST_AsMVTGeom(ST_Transform(geometry, {WEB_MERCATOR_SRID}), ST_TileEnvelope(%s, %s, %s), {MVT_EXTENT}, 0, true) AS geom"
+    if z > config.cluster_max_zoom:
         base = query.filter(geometry__intersects=tile_bounds).values(*fields, "geometry")
         base_sql, base_params = base.query.sql_with_params()
-        sql = f"WITH filtered AS ({base_sql}) SELECT COALESCE(ST_AsMVT(tile, %s, 4096, 'geom'), ''::bytea) FROM (SELECT {selected}, false AS cluster, 1 AS point_count, {geometry} FROM filtered) AS tile"
+        sql = f"WITH filtered AS ({base_sql}) SELECT COALESCE(ST_AsMVT(tile, %s, {MVT_EXTENT}, 'geom'), ''::bytea) FROM (SELECT {selected}, false AS cluster, 1 AS point_count, {geometry} FROM filtered) AS tile"
         params = [*base_params, collection.api_name(), z, x, y]
     else:
-        grid_size = 156543.03392804097 / (2**z) * CLUSTER_RADIUS_PIXELS
+        grid_size = WEB_MERCATOR_INITIAL_RESOLUTION / (2**z) * config.cluster_radius_pixels
         grouped = ", ".join(
             f"CASE WHEN count(*) = 1 THEN (array_agg({quote(field)}))[1] END AS {quote(field)}"
             for field in fields
         )
         sql = f"""WITH filtered AS ({base_sql}), grouped AS (
-            SELECT ST_ClusterDBSCAN(ST_Transform(geometry, 3857), eps := %s, minpoints := 1)
+            SELECT ST_ClusterDBSCAN(ST_Transform(geometry, {WEB_MERCATOR_SRID}), eps := %s, minpoints := 1)
                 OVER (ORDER BY source_pk) AS cell, * FROM filtered
-        ) SELECT COALESCE(ST_AsMVT(tile, %s, 4096, 'geom'), ''::bytea) FROM (
+        ) SELECT COALESCE(ST_AsMVT(tile, %s, {MVT_EXTENT}, 'geom'), ''::bytea) FROM (
             SELECT {grouped}, count(*) > 1 AS cluster, count(*) AS point_count,
             md5(min(source_pk)) AS cluster_id,
-            ST_AsMVTGeom(ST_Centroid(ST_Collect(ST_Transform(geometry, 3857))), ST_TileEnvelope(%s, %s, %s), 4096, 0, true) AS geom
+            ST_AsMVTGeom(ST_Centroid(ST_Collect(ST_Transform(geometry, {WEB_MERCATOR_SRID}))), ST_TileEnvelope(%s, %s, %s), {MVT_EXTENT}, 0, true) AS geom
             FROM grouped GROUP BY cell
         ) AS tile"""
         params = [*base_params, grid_size, collection.api_name(), z, x, y]

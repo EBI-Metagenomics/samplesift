@@ -4,19 +4,27 @@ import { fileURLToPath } from 'node:url';
 // One named dataset; API order is a bounded subset, not a random sample.
 const datasetId = 'ad65221f-0539-44aa-925e-4acf62ad0c6a';
 const api = 'https://api.obis.org/v3';
-const limit = Number(process.argv[2] ?? 10000);
-if (!Number.isInteger(limit) || limit < 1 || limit > 100000) {
-  throw new Error('Record limit must be an integer from 1 to 100000.');
+const DEFAULT_RECORD_LIMIT = 10000;
+const MAX_RECORD_LIMIT = 100000;
+const PAGE_SIZE = 1000;
+const MAX_ATTEMPTS = 3;
+const REQUEST_TIMEOUT_MS = 60000;
+const RETRY_INTERVAL_MS = 1000;
+const MAX_LONGITUDE = 180;
+const MAX_WEB_MERCATOR_LATITUDE = 85.05112878;
+const limit = Number(process.argv[2] ?? DEFAULT_RECORD_LIMIT);
+if (!Number.isInteger(limit) || limit < 1 || limit > MAX_RECORD_LIMIT) {
+  throw new Error(`Record limit must be an integer from 1 to ${MAX_RECORD_LIMIT}.`);
 }
 async function getJson(url) {
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     try {
-      const response = await fetch(url, { signal: AbortSignal.timeout(60000) });
+      const response = await fetch(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
       if (!response.ok) throw new Error(`OBIS HTTP ${response.status}`);
       return await response.json();
     } catch (error) {
-      if (attempt === 2) throw error;
-      await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
+      if (attempt === MAX_ATTEMPTS - 1) throw error;
+      await new Promise((resolve) => setTimeout(resolve, RETRY_INTERVAL_MS * (attempt + 1)));
     }
   }
 }
@@ -30,7 +38,7 @@ let pages = 0;
 while (inspected < limit) {
   const query = new URLSearchParams({
     datasetid: datasetId,
-    size: String(Math.min(1000, limit - inspected)),
+    size: String(Math.min(PAGE_SIZE, limit - inspected)),
     fields: 'id,decimalLongitude,decimalLatitude,depth,date_start,eventDate,scientificName',
   });
   if (after) query.set('after', after);
@@ -46,7 +54,7 @@ while (inspected < limit) {
     const depth = row.depth;
     const dateMs = row.date_start;
     if (![lon, lat, depth, dateMs].every(Number.isFinite)) continue;
-    if (Math.abs(lon) > 180 || Math.abs(lat) > 85.05112878 || depth < 0) continue;
+    if (Math.abs(lon) > MAX_LONGITUDE || Math.abs(lat) > MAX_WEB_MERCATOR_LATITUDE || depth < 0) continue;
     const date = new Date(dateMs).toISOString().slice(0, 10);
     records.push({ id: row.id, lon, lat, depth, date, name: row.scientificName ?? 'Unknown' });
   }

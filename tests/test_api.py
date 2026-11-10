@@ -97,3 +97,64 @@ def test_spatial_registration_is_rejected_after_api_freeze() -> None:
 
     with pytest.raises(RuntimeError, match="routes are frozen"):
         frozen_registry.register(FrozenCollection)
+
+
+def test_openapi_uses_configured_pagination(settings) -> None:
+    settings.SAMPLESIFT_DEFAULT_PAGE_SIZE = 7
+    settings.SAMPLESIFT_MAX_PAGE_SIZE = 12
+    schema = api.get_openapi_schema(path_prefix="/samplesift")
+    limit = schema["components"]["schemas"]["ApiSamplesQuery"]["properties"]["limit"]
+    assert limit["default"] == 7
+    assert limit["maximum"] == 12
+
+
+def test_results_use_configured_pagination(settings, monkeypatch) -> None:
+    from ninja.errors import HttpError
+
+    from samplesift.django.api import _results_for_collection
+
+    class EmptyQuery:
+        def order_by(self, *args):
+            return self
+
+        def count(self):
+            return 0
+
+        def __getitem__(self, item):
+            return []
+
+    monkeypatch.setattr("samplesift.django.api._queryset", lambda *args: EmptyQuery())
+    settings.SAMPLESIFT_DEFAULT_PAGE_SIZE = 7
+    settings.SAMPLESIFT_MAX_PAGE_SIZE = 12
+    assert _results_for_collection(ApiSampleCollection, {})["limit"] == 7
+    assert _results_for_collection(ApiSampleCollection, {"limit": 12})["limit"] == 12
+    with pytest.raises(HttpError, match="between 1 and 12"):
+        _results_for_collection(ApiSampleCollection, {"limit": 13})
+
+
+def test_tile_clustering_uses_configured_zoom_and_radius(settings, monkeypatch) -> None:
+    from unittest.mock import MagicMock
+
+    from samplesift.django.api import _mvt
+    from samplesift.django.constants import WEB_MERCATOR_INITIAL_RESOLUTION
+
+    settings.SAMPLESIFT_CLUSTER_MAX_ZOOM = 2
+    settings.SAMPLESIFT_CLUSTER_RADIUS_PIXELS = 9
+    monkeypatch.setattr("samplesift.django.api._tile_polygon", lambda *args: object())
+    monkeypatch.setattr(registry, "target_database", lambda: "configured")
+    connection = MagicMock(vendor="postgresql")
+    connection.ops.quote_name.side_effect = lambda value: value
+    cursor = connection.cursor.return_value.__enter__.return_value
+    cursor.fetchone.return_value = (b"tile",)
+    monkeypatch.setattr("samplesift.django.api.connections", {"configured": connection})
+    query = MagicMock()
+    query.values.return_value.query.sql_with_params.return_value = ("SELECT 1", [])
+    query.filter.return_value.values.return_value.query.sql_with_params.return_value = ("SELECT 1", [])
+
+    assert _mvt(ApiSampleCollection, query, 2, 0, 0) == b"tile"
+    sql, params = cursor.execute.call_args.args
+    assert "ST_ClusterDBSCAN" in sql
+    assert params[0] == WEB_MERCATOR_INITIAL_RESOLUTION / 4 * 9
+
+    _mvt(ApiSampleCollection, query, 3, 0, 0)
+    assert "ST_ClusterDBSCAN" not in cursor.execute.call_args.args[0]

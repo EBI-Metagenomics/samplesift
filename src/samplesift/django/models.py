@@ -8,6 +8,8 @@ from typing import Any, ClassVar
 
 from django.db import models
 
+from .constants import WGS84_SRID
+
 
 class CollectionDefinitionError(ValueError):
     """Raised when a collection declaration cannot be materialised."""
@@ -156,7 +158,7 @@ class SampleSiftCollection:
                 ) from error
             if not isinstance(source_field, gis_models.PointField):
                 raise CollectionDefinitionError("Point field= must reference a GeoDjango PointField.")
-            return gis_models.PointField(srid=4326, null=source_field.null)
+            return gis_models.PointField(srid=WGS84_SRID, null=source_field.null)
 
         for name in (declaration.longitude, declaration.latitude):
             assert name is not None
@@ -168,7 +170,7 @@ class SampleSiftCollection:
                 ) from error
             if not isinstance(source_field, (models.IntegerField, models.FloatField, models.DecimalField)):
                 raise CollectionDefinitionError("Point longitude/latitude fields must be numeric.")
-        return gis_models.PointField(srid=4326, null=True)
+        return gis_models.PointField(srid=WGS84_SRID, null=True)
 
     @classmethod
     def collection_fields(cls) -> dict[str, models.Field[Any, Any]]:
@@ -249,8 +251,8 @@ class SampleSiftCollection:
                 if value is None:
                     return None
                 value = value.clone()
-                if value.srid != 4326:
-                    value.transform(4326)
+                if value.srid != WGS84_SRID:
+                    value.transform(WGS84_SRID)
                 return value
             longitude = getattr(instance, declaration.longitude)  # type: ignore[arg-type]
             latitude = getattr(instance, declaration.latitude)  # type: ignore[arg-type]
@@ -258,7 +260,7 @@ class SampleSiftCollection:
                 return None
             from django.contrib.gis.geos import Point as GEOSPoint
 
-            return GEOSPoint(float(longitude), float(latitude), srid=4326)
+            return GEOSPoint(float(longitude), float(latitude), srid=WGS84_SRID)
         property_declaration = cls.properties().get(name)
         if property_declaration is None:
             source_field = cls.source_model()._meta.get_field(name)
