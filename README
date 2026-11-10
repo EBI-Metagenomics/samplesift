@@ -22,6 +22,7 @@ Then add the Django app to `INSTALLED_APPS`:
 ```python
 INSTALLED_APPS = [
     # ...
+    "django.contrib.postgres",  # required for spatial collection indexes
     "samplesift.django.apps.SamplesiftDjangoConfig",
 ]
 ```
@@ -102,3 +103,8 @@ or couple npm releases to the Python distribution.
 
 Future Python integrations are exposed as extras when implemented, for example
 `samplesift[jupyter]` and `samplesift[sandbox]`.
+
+## OBIS example
+
+A self-contained Django and PostGIS example with an OBIS fixture is available in
+[examples/obis/README.md](examples/obis/README.md).

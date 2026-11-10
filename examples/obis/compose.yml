@@ -1,0 +1,29 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: obis
+      POSTGRES_USER: obis
+      POSTGRES_PASSWORD: obis
+    volumes:
+      - obis-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U obis -d obis"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  app:
+    build:
+      context: ../..
+      dockerfile: examples/obis/Dockerfile
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      DJANGO_ALLOWED_HOSTS: "${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,[::1],172.16.14.165}"
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8001:8000"
+volumes:
+  obis-db:
