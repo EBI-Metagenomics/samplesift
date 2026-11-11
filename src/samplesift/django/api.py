@@ -6,6 +6,7 @@ import base64
 import hashlib
 import json
 import math
+from collections.abc import Iterator
 from datetime import date, datetime, time
 from decimal import Decimal
 from typing import Annotated, Any
@@ -19,8 +20,14 @@ from ninja.errors import HttpError
 
 from samplesift.query import Queryable
 
+from .cache import VERSION_SQL, collection_version, tile_cache, tile_key
 from .config import get_settings
-from .constants import MVT_EXTENT, WEB_MERCATOR_INITIAL_RESOLUTION, WEB_MERCATOR_SRID
+from .constants import (
+    MVT_EXTENT,
+    WEB_MERCATOR_INITIAL_RESOLUTION,
+    WEB_MERCATOR_ORIGIN_SHIFT,
+    WEB_MERCATOR_SRID,
+)
 from .filters import compile_filter
 from .models import SampleSiftCollection
 from .registry import registry
@@ -233,7 +240,7 @@ class SamplesiftAPI(NinjaAPI):
             payload: Annotated[dict[str, Any], Body(...)],
         ) -> HttpResponse:
             return HttpResponse(
-                _mvt(collection, _queryset(collection, payload), z, x, y),
+                _cached_mvt(collection, payload, z, x, y),
                 content_type="application/vnd.mapbox-vector-tile",
             )
 
@@ -354,6 +361,26 @@ def _queryset(collection: type[SampleSiftCollection], payload: dict[str, Any]) -
     return _apply_filters(query, collection, payload)
 
 
+def _cached_mvt(collection: type[SampleSiftCollection], payload: dict[str, Any], z: int, x: int, y: int) -> bytes:
+    query = _queryset(collection, payload)
+    _tile_polygon(z, x, y)
+    cache = tile_cache()
+    using = registry.target_database()
+    if cache is None or connections[using].in_atomic_block:
+        return _mvt(collection, query, z, x, y)
+    # Read the version before the tile: a concurrent write can then only store
+    # newer bytes under an older, already unreachable key.
+    version = collection_version(collection, using)
+    if version is None:
+        return _mvt(collection, query, z, x, y)
+    key = tile_key(collection, version, payload, z, x, y)
+    result = cache.get(key)
+    if result is None:
+        result = _mvt(collection, query, z, x, y)
+        cache.set(key, result, timeout=get_settings().cache_timeout)
+    return result
+
+
 def _results_for_collection(
     collection: type[SampleSiftCollection], payload: dict[str, Any]
 ) -> dict[str, Any]:
@@ -395,34 +422,106 @@ def _mvt(collection: type[SampleSiftCollection], query: QuerySet[models.Model], 
     connection = connections[registry.target_database()]
     if connection.vendor != "postgresql":
         raise HttpError(501, "Vector tiles require the configured PostGIS database.")
-    fields = ["source_pk", *_public_fields(collection)]
-    base = query.values(*fields, "geometry")
-    base_sql, base_params = base.query.sql_with_params()
-    quote = connection.ops.quote_name
-    selected = ", ".join(quote(field) for field in fields)
-    config = get_settings()
-    geometry = f"ST_AsMVTGeom(ST_Transform(geometry, {WEB_MERCATOR_SRID}), ST_TileEnvelope(%s, %s, %s), {MVT_EXTENT}, 0, true) AS geom"
-    if z > config.cluster_max_zoom:
+    if z > get_settings().cluster_max_zoom:
+        fields = ["source_pk", *_public_fields(collection)]
+        selected = ", ".join(connection.ops.quote_name(field) for field in fields)
+        geometry = f"ST_AsMVTGeom(ST_Transform(geometry, {WEB_MERCATOR_SRID}), ST_TileEnvelope(%s, %s, %s), {MVT_EXTENT}, 0, true) AS geom"
         base = query.filter(geometry__intersects=tile_bounds).values(*fields, "geometry")
         base_sql, base_params = base.query.sql_with_params()
         sql = f"WITH filtered AS ({base_sql}) SELECT COALESCE(ST_AsMVT(tile, %s, {MVT_EXTENT}, 'geom'), ''::bytea) FROM (SELECT {selected}, false AS cluster, 1 AS point_count, {geometry} FROM filtered) AS tile"
         params = [*base_params, collection.api_name(), z, x, y]
     else:
-        grid_size = WEB_MERCATOR_INITIAL_RESOLUTION / (2**z) * config.cluster_radius_pixels
-        grouped = ", ".join(
-            f"CASE WHEN count(*) = 1 THEN (array_agg({quote(field)}))[1] END AS {quote(field)}"
-            for field in fields
-        )
-        sql = f"""WITH filtered AS ({base_sql}), grouped AS (
-            SELECT ST_ClusterDBSCAN(ST_Transform(geometry, {WEB_MERCATOR_SRID}), eps := %s, minpoints := 1)
-                OVER (ORDER BY source_pk) AS cell, * FROM filtered
-        ) SELECT COALESCE(ST_AsMVT(tile, %s, {MVT_EXTENT}, 'geom'), ''::bytea) FROM (
-            SELECT {grouped}, count(*) > 1 AS cluster, count(*) AS point_count,
-            md5(min(source_pk)) AS cluster_id,
-            ST_AsMVTGeom(ST_Centroid(ST_Collect(ST_Transform(geometry, {WEB_MERCATOR_SRID}))), ST_TileEnvelope(%s, %s, %s), {MVT_EXTENT}, 0, true) AS geom
-            FROM grouped GROUP BY cell
+        clusters_sql, clusters_params = _clusters_sql(collection, query, z)
+        sql = f"""{clusters_sql} SELECT COALESCE({_tile_aggregate()}, ''::bytea) FROM (
+            SELECT {_feature_columns(collection)},
+            ST_AsMVTGeom(centroid, ST_TileEnvelope(%s, %s, %s), {MVT_EXTENT}, 0, true) AS geom
+            FROM clusters
         ) AS tile"""
-        params = [*base_params, grid_size, collection.api_name(), z, x, y]
+        params = [*clusters_params, collection.api_name(), z, x, y]
     with connection.cursor() as cursor:
         cursor.execute(sql, params)
         return bytes(cursor.fetchone()[0])
+
+
+def _clusters_sql(
+    collection: type[SampleSiftCollection], query: QuerySet[models.Model], z: int
+) -> tuple[str, list[Any]]:
+    """Cluster the whole filtered collection once for zoom ``z``.
+
+    Both single tiles and prewarmed zooms cut their features from these rows, so
+    the two paths always agree on membership and properties.
+    """
+    connection = connections[registry.target_database()]
+    quote = connection.ops.quote_name
+    fields = ["source_pk", *_public_fields(collection)]
+    base_sql, base_params = query.values(*fields, "geometry").query.sql_with_params()
+    grid_size = WEB_MERCATOR_INITIAL_RESOLUTION / (2**z) * get_settings().cluster_radius_pixels
+    grouped = ", ".join(
+        f"CASE WHEN count(*) = 1 THEN (array_agg({quote(field)}))[1] END AS {quote(field)}"
+        for field in fields
+    )
+    sql = f"""WITH filtered AS ({base_sql}), grouped AS (
+        SELECT ST_ClusterDBSCAN(ST_Transform(geometry, {WEB_MERCATOR_SRID}), eps := %s, minpoints := 1)
+            OVER (ORDER BY source_pk) AS cell, * FROM filtered
+    ), clusters AS (
+        SELECT {grouped}, count(*) > 1 AS cluster, count(*) AS point_count,
+        md5(min(source_pk)) AS cluster_id,
+        ST_Centroid(ST_Collect(ST_Transform(geometry, {WEB_MERCATOR_SRID}))) AS centroid
+        FROM grouped GROUP BY cell
+    )"""
+    return sql, [*base_params, grid_size]
+
+
+def _feature_columns(collection: type[SampleSiftCollection], source: str = "clusters") -> str:
+    quote = connections[registry.target_database()].ops.quote_name
+    fields = ["source_pk", *_public_fields(collection), "cluster", "point_count", "cluster_id"]
+    return ", ".join(f"{source}.{quote(field)}" for field in fields)
+
+
+def _tile_aggregate() -> str:
+    # A fixed feature order makes prewarmed and on-demand tiles byte-identical.
+    return f"ST_AsMVT(tile, %s, {MVT_EXTENT}, 'geom' ORDER BY tile.cluster_id)"
+
+
+def _zoom_tiles(
+    collection: type[SampleSiftCollection], query: QuerySet[models.Model], z: int
+) -> Iterator[tuple[str | None, int, int, bytes]]:
+    """Yield ``(version, x, y, tile)`` for every non-empty clustered tile at ``z``.
+
+    Clustering runs once for the zoom instead of once per tile. Each centroid is
+    offered to the tiles around its position; ST_AsMVTGeom then keeps exactly the
+    tiles an on-demand request would include it in. The version is selected in
+    the same statement, so it describes the snapshot the tiles were built from.
+    """
+    connection = connections[registry.target_database()]
+    clusters_sql, clusters_params = _clusters_sql(collection, query, z)
+    # Fractional tile coordinates; the small margin admits both neighbours of a
+    # centroid on (or within rounding of) a tile edge.
+    size = 2 * WEB_MERCATOR_ORIGIN_SHIFT / 2**z
+    last = 2**z - 1
+    column = f"(ST_X(clusters.centroid) + {WEB_MERCATOR_ORIGIN_SHIFT}) / {size}"
+    row = f"({WEB_MERCATOR_ORIGIN_SHIFT} - ST_Y(clusters.centroid)) / {size}"
+
+    def candidates(position: str) -> str:
+        return (
+            f"generate_series(GREATEST(floor({position} - 1e-6), 0)::int, "
+            f"LEAST(floor({position} + 1e-6), {last})::int)"
+        )
+
+    sql = f"""{clusters_sql} SELECT (SELECT {VERSION_SQL}), placed.tx, placed.ty, {_tile_aggregate()}
+        FROM (
+            SELECT clusters.*, tx, ty FROM clusters
+            CROSS JOIN LATERAL {candidates(column)} AS tx
+            CROSS JOIN LATERAL {candidates(row)} AS ty
+        ) AS placed
+        CROSS JOIN LATERAL (
+            SELECT {_feature_columns(collection, "placed")},
+            ST_AsMVTGeom(placed.centroid, ST_TileEnvelope(%s, placed.tx, placed.ty), {MVT_EXTENT}, 0, true) AS geom
+        ) AS tile
+        WHERE tile.geom IS NOT NULL
+        GROUP BY placed.tx, placed.ty"""
+    params = [*clusters_params, collection.table_name(), collection.api_name(), z]
+    with connection.chunked_cursor() as cursor:
+        cursor.execute(sql, params)
+        for version, x, y, tile in cursor:
+            yield version, x, y, bytes(tile)

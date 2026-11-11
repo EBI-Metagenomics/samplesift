@@ -55,7 +55,7 @@ def test_distance_clusters_cross_tile_boundaries_and_respect_filters() -> None:
                 _mvt(Collection, query, 2, x, 1)
             sql, params = captured[-1]
             sql = sql.replace(
-                "COALESCE(ST_AsMVT(tile, %s, 4096, 'geom'), ''::bytea)",
+                "COALESCE(ST_AsMVT(tile, %s, 4096, 'geom' ORDER BY tile.cluster_id), ''::bytea)",
                 "COALESCE(json_agg(row_to_json(tile)) FILTER (WHERE geom IS NOT NULL), '[]'::json)",
             )
             with connection.cursor() as cursor:
