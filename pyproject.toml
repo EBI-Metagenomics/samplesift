@@ -7,6 +7,10 @@ requires-python = ">=3.12"
 dependencies = []
 
 [project.optional-dependencies]
+jupyter = [
+  "anywidget>=0.11,<0.12",
+  "traitlets>=5.14,<6",
+]
 django = [
   "Django>=6.0,<6.1",
   "django-ninja>=1.5,<2",
@@ -18,6 +22,10 @@ requires = ["uv_build>=0.11,<0.12"]
 build-backend = "uv_build"
 
 [dependency-groups]
+notebook = [
+  "jupyterlab>=4,<5",
+  "ipykernel>=7,<8",
+]
 dev = [
   "pre-commit>=4.0,<5",
   "pytest>=9.0,<10",

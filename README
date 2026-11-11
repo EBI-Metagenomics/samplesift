@@ -133,6 +133,25 @@ curl -X QUERY http://localhost:8000/samplesift/collections/samples/tiles/2/1/1 \
 See [Django collections](docs/django-collections.md#spatial-query-api) for the
 filter operators, pagination, and map-client integration.
 
+## Jupyter widget
+
+Install the optional notebook wrapper:
+
+```shell
+pip install 'samplesift[jupyter]'
+```
+
+```python
+from samplesift.jupyter import SampleSift
+
+SampleSift(demo=True)
+```
+
+The wrapper uses the existing frontend component from a running Vite server.
+From a source checkout, use `task frontend:dev` and `task jupyter:lab` in separate terminals.
+Run `task jupyter:setup` for the notebook environment.
+See [Jupyter setup and limits](docs/jupyter.md) and [the example notebook](examples/jupyter.ipynb).
+
 ## Repository layout
 
 ```text
@@ -148,8 +167,7 @@ there is no root npm workspace or coupling between npm releases and the Python
 distribution. See [frontend/README.md](frontend/README.md) for development and
 embedding instructions.
 
-Future Python integrations are exposed as extras when implemented, for example
-`samplesift[jupyter]` and `samplesift[sandbox]`.
+Future Python integrations can use additional extras, for example `samplesift[sandbox]`.
 
 ## OBIS example
 
