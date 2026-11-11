@@ -9,11 +9,20 @@ import { validatePolygon, validateSearchQuery } from '../data/validation';
 import type { Sample, SampleDataSource, SampleFilters, SearchQuery, SearchResult, SelectionChangeDetail, SampleClickDetail, FilterField, TaxonomyOption } from '../types';
 import './selection-map';
 import type { SampleSiftMap } from './selection-map';
+import './collection-explorer';
+import type { SampleSiftCollection } from './collection-explorer';
+import type { CollectionMetadata, CollectionOptions, CollectionSearchState } from '../collection/types';
+import { createEmptyCollectionState } from '../collection/types';
 
 /** Complete browser-native explorer. All public data and events use ordinary objects. */
 export class SampleSift extends LitElement {
   static properties = {
     apiUrl: { type: String, attribute: 'api-url' },
+    collection: { type: String },
+    tileLayer: { type: String, attribute: 'tile-layer' },
+    collectionOptions: { attribute: false },
+    collectionState: { attribute: false },
+    collectionPaused: { type: Boolean, attribute: 'collection-paused' },
     demo: { type: Boolean },
     pageSize: { type: Number, attribute: 'page-size' },
     dataSource: { attribute: false },
@@ -33,6 +42,12 @@ export class SampleSift extends LitElement {
   };
 
   apiUrl = '';
+  collection = '';
+  tileLayer = '';
+  collectionOptions?: CollectionOptions;
+  collectionState: CollectionSearchState = createEmptyCollectionState();
+  collectionPaused = false;
+  private _collectionConfig?: CollectionOptions;
   demo = false;
   pageSize = 10;
   dataSource: SampleDataSource | undefined;
@@ -66,7 +81,18 @@ export class SampleSift extends LitElement {
   }
 
   protected willUpdate(changed: PropertyValues<this>) {
-    const sourceChanged = changed.has('apiUrl') || changed.has('dataSource') || changed.has('demo');
+    const collectionChanged = changed.has('collectionOptions') || changed.has('collection') || changed.has('tileLayer') || changed.has('apiUrl');
+    if (collectionChanged) {
+      this._collectionConfig = this.collectionOptions ?? (this.collection ? {
+        baseUrl: this.apiUrl || '/samplesift', collection: this.collection,
+        ...(this.tileLayer ? { tiles: { sourceLayer: this.tileLayer } } : {}),
+      } : undefined);
+    }
+    if (this._collectionConfig) {
+      this._request?.abort(); this._requestId++; this._source = undefined; this._result = null;
+      return;
+    }
+    const sourceChanged = collectionChanged || changed.has('dataSource') || changed.has('demo');
     if (sourceChanged) {
       this._sourceError = '';
       try {
@@ -165,7 +191,24 @@ export class SampleSift extends LitElement {
   setSelection(selection: Polygon | null) { this.selection = selection ? structuredClone(selection) : null; }
   clearSelection() { this.selection = null; }
 
+  get collectionMetadata(): CollectionMetadata | undefined {
+    return this.renderRoot.querySelector<SampleSiftCollection>('sample-sift-collection')?.metadata;
+  }
+  setCollectionState(state: CollectionSearchState) {
+    const explorer = this.renderRoot.querySelector<SampleSiftCollection>('sample-sift-collection');
+    if (explorer) { explorer.setState(state); this.collectionState = explorer.state; }
+    else this.collectionState = structuredClone(state);
+  }
+  private onCollectionState(event: CustomEvent) {
+    // Keep the same immutable state reference to avoid a second search during event reflection.
+    this.collectionState = (event.currentTarget as SampleSiftCollection).state;
+  }
+
   async refresh(): Promise<void> {
+    if (this._collectionConfig) {
+      await this.renderRoot.querySelector<SampleSiftCollection>('sample-sift-collection')?.refresh();
+      return;
+    }
     this._request?.abort();
     const requestId = ++this._requestId;
     this._error = '';
@@ -323,6 +366,10 @@ export class SampleSift extends LitElement {
   }
 
   render() {
+    if (this._collectionConfig) return html`<sample-sift-collection
+      .options=${this._collectionConfig} .state=${this.collectionState} .paused=${this.collectionPaused}
+      .mapStyle=${this.mapStyle} .pageSize=${this.pageSize}
+      @collectionstatechange=${this.onCollectionState}></sample-sift-collection>`;
     const result = this._result;
     const visibleItems = this._loading || this._error || this._filterError ? [] : result?.items ?? [];
     const filters: SampleFilters = { ...EMPTY_FILTERS, ...this.filters, ...this._filterDrafts };

@@ -8,3 +8,4 @@ export type { FilterParameterNames } from './query-params';
 export { EMPTY_FILTERS } from '../types';
 export type * from '../types';
 export type { HttpDataSourceOptions } from './http';
+export * from '../collection/index';

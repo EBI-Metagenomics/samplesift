@@ -1,8 +1,8 @@
 # SampleSift components
 
-`<sample-sift>` is a reusable browser explorer built with Lit, MapLibre GL JS, and Terra Draw. It combines rectangle/polygon selection, assembly contig N50 and taxonomy filters, optional biome/date controls, a distinct-sample count, and a paginated table. `<sample-sift-map>` supplies the map alone.
+`<sample-sift>` is an embeddable browser explorer built with Lit, MapLibre GL JS, Terra Draw and Golem. **Collection mode** discovers backend queryables and OpenAPI metadata, builds typed filters, sends CQL2 over HTTP `QUERY`, and combines result pages with filtered vector tiles. See the [collection API guide](COLLECTION_API.md).
 
-This is a frontend prototype. Explicit `demo` mode uses **synthetic samples, assembly metrics, and taxonomic annotations**. A real MGnify backend is not included, and the API below remains a proposed SampleSift contract.
+The original **legacy sample mode** remains available: fixed N50/taxonomy/biome/date filters, `SampleDataSource`, and explicit `demo` mode with synthetic sample/assembly evidence. Its proposed `POST /samples/search` contract is documented below. The configured collection service is not automatically MGnify data. `<sample-sift-map>` supplies the map alone.
 
 ## Develop and build
 
@@ -20,11 +20,24 @@ npm run test:browser
 
 If Chrome is already installed, `PLAYWRIGHT_CHANNEL=chrome npm run test:browser` can use it instead of downloading Chromium. These are verification commands, not a claim that they have been run in your environment.
 
-The development server exposes the main synthetic demo, `/demo/contract.html` with two independent components, and `/demo/url-state.html` with host-managed URL state for `left` and `right` instances. The latter's integration code is in [demo/url-state.ts](demo/url-state.ts).
+The target is the backend origin; the development proxy keeps browser API requests on `/samplesift`. The main `/` demo uses the `occurrences` collection. `/demo/collection-url.html` demonstrates two collection widgets with host-owned URLs. The synthetic legacy demo is at `/demo/legacy.html`; `/demo/contract.html` and `/demo/url-state.html` retain the legacy integration examples. Those synthetic pages also work with plain `npm run dev` and no backend target. See [the proxy guidance](COLLECTION_API.md#development-proxy-and-limits) for production and CORS considerations.
 
 `npm run build` checks TypeScript and writes ES modules, declarations, and worker assets to `packages/components/dist/`. Run `npm run preview` and open `/embed.html` to inspect a plain HTML consumer of the build.
 
-## Embed
+## Collection mode
+
+```html
+<script type="module" src="/sample-sift/sample-sift.js"></script>
+<sample-sift api-url="/samplesift" collection="occurrences" tile-layer="occurrences" page-size="25"></sample-sift>
+```
+
+`api-url` is the API root including `/samplesift`. `collection` opts into collection mode; `tile-layer` explicitly names the source layer inside the MVT. Alternatively, assign `collectionOptions` as a JavaScript property. Advertised `s_intersects` geometry support enables rectangles and polygons; available scalar filters come from metadata rather than hardcoded domain fields.
+
+Use `collectionState`, silent `setCollectionState(state)`, `collectionMetadata`, and `collectionPaused` for host integration. Collection events and pure URL helpers are documented in [COLLECTION_API.md](COLLECTION_API.md). The host owns optional URL synchronization. The direct `<sample-sift-collection>` element exposes the same explorer without the legacy wrapper.
+
+## Legacy mode: embed
+
+The following sections describe the original fixed sample contract, used when no collection is configured. Its state, adapters, methods and events remain separate from collection mode.
 
 Serve the complete `dist/` directory over HTTP, preserving its relative file layout:
 
@@ -33,7 +46,7 @@ Serve the complete `dist/` directory over HTTP, preserving its relative file lay
 <sample-sift demo page-size="25"></sample-sift>
 ```
 
-Both custom elements register on import. Their styles are contained in Shadow DOM; keep the emitted JavaScript chunks and worker assets together. Browser DOM and WebGL support are required; server-side rendering is outside this prototype's scope.
+The custom elements register on import. Their styles are contained in Shadow DOM; keep the emitted JavaScript chunks and worker assets together. Browser DOM and WebGL support are required; server-side rendering is outside this prototype's scope.
 
 A bundler-based host can install the local workspace package and import `@samplesift/components`. This repository does not imply that the package has been published to a registry.
 
@@ -43,9 +56,9 @@ For a backend that implements the query transport described below:
 <sample-sift api-url="https://samples.example.org/api" page-size="25"></sample-sift>
 ```
 
-Without `demo`, `api-url`, or a `dataSource` property, the component shows setup guidance. An explicitly assigned `dataSource` takes precedence over `api-url` and `demo`. A remote API must allow requests from the host page's origin.
+In legacy mode, without `demo`, `api-url`, or a `dataSource` property, the component shows setup guidance. An explicitly assigned `dataSource` takes precedence over `api-url` and `demo`. A remote API must allow requests from the host page's origin.
 
-## Configure the controls and filters
+## Legacy controls and filters
 
 Assign arrays and objects as JavaScript properties:
 
@@ -78,7 +91,7 @@ explorer.setFilters({ ...EMPTY_FILTERS });
 
 Valid user edits commit on the control's `change` event, normally blur for text/number inputs and immediate change for selects/checkboxes. A commit emits `filterschange` with `{ filters }` before the API request succeeds or fails. Invalid drafts show an error and prevent a broader query; they do not emit a valid-filter event.
 
-## Assembly evidence and matching semantics
+## Legacy assembly evidence and matching semantics
 
 A sample may include `assemblies: AssemblyEvidence[]`. Each evidence record has a unique accession within that sample, `contigN50Bp: number | null`, and `taxa: TaxonEvidence[]`:
 
@@ -229,7 +242,7 @@ restore();
 
 For an application router, perform the same read/patch/restore steps through its navigation API instead of calling `history` directly. Remove host listeners when disposing the integration. See `/demo/url-state.html` and [its source](demo/url-state.ts) for two synthetic instances with independent namespaces.
 
-## Methods and events
+## Legacy methods and events
 
 | Method | Behavior |
 | --- | --- |
@@ -283,4 +296,4 @@ map.addEventListener('sampleclick', event => console.log(event.detail.sample));
 
 ## Limits
 
-The implementation supports these four filter groups, local taxonomy suggestions, pure URL helpers, reusable components, and synthetic demonstration data. It does not include a live MGnify import/backend, remote taxonomy autocomplete or lineage resolution, freehand drawing, a sample vector-tile service, PGlite, or a verified 100k-record performance result. MapLibre replaces the earlier Leaflet proposal. Dependency licenses remain their own; a project license has not yet been selected for this prototype.
+Collection mode supports a declared subset of JSON Schema and CQL2, backend result pages and explicitly configured vector tiles; see its [capabilities and limits](COLLECTION_API.md). Legacy mode retains the four fixed filter groups, local taxonomy suggestions and synthetic sample evidence. The frontend does not provide an MGnify importer, remote taxonomy autocomplete or lineage resolution, freehand drawing, PGlite, or a verified 100k-record performance result. MapLibre replaces the earlier Leaflet proposal. Dependency licenses remain their own; a project license has not yet been selected for this prototype.

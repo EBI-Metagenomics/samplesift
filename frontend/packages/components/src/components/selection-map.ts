@@ -1,7 +1,9 @@
-import { LitElement, css, html, unsafeCSS, type PropertyValues } from 'lit';
+import { LitElement, css, html, nothing, unsafeCSS, type PropertyValues } from 'lit';
 import {
   Map as MapLibreMap,
   NavigationControl,
+  addProtocol,
+  removeProtocol,
   setWorkerUrl,
   type GeoJSONSource,
   type MapLayerMouseEvent,
@@ -19,11 +21,16 @@ import { TerraDrawMapLibreGLAdapter } from 'terra-draw-maplibre-gl-adapter';
 import type { FeatureCollection, Point, Polygon } from 'geojson';
 import { isValidCoordinate, validatePolygon } from '../data/validation';
 import type { Sample, SampleClickDetail, SelectionChangeDetail } from '../types';
+import { createCollectionTileLoader } from '../collection/tiles';
+import type { CollectionFeatureClickDetail, CollectionTileSource } from '../collection/tiles';
 
 type SelectionMode = 'rectangle' | 'polygon' | 'select';
 const SAMPLE_SOURCE = 'samplesift-samples';
 const SAMPLE_LAYER = 'samplesift-sample-points';
 const SELECTION_SOURCE = 'samplesift-selection';
+const CLUSTER_LAYER = 'samplesift-collection-clusters';
+const CLUSTER_LABEL_LAYER = 'samplesift-collection-counts';
+let tileProtocolSequence = 0;
 
 // Vite emits this worker beside the distributable, so the plain HTML build also works.
 setWorkerUrl(mapLibreWorkerUrl);
@@ -53,11 +60,17 @@ const clonePolygon = (polygon: Polygon): Polygon => ({
 export class SampleSiftMap extends LitElement {
   static properties = {
     samples: { attribute: false },
+    tileSource: { attribute: false },
+    selectionModes: { attribute: false },
     selection: { attribute: false },
     mapStyle: { attribute: false },
     _mode: { state: true },
     _ready: { state: true },
     _error: { state: true },
+    _tilePending: { state: true },
+    _tileRequestError: { state: true },
+    _tileRenderError: { state: true },
+    _tilesRendering: { state: true },
   };
 
   static styles = [unsafeCSS(mapLibreStyles), css`
@@ -81,6 +94,16 @@ export class SampleSiftMap extends LitElement {
       padding: 9px 12px; border: 1px solid #d6dfda; border-radius: 8px; background: rgba(255,255,255,.96);
       font: 500 12px/1.5 var(--samplesift-font, system-ui, sans-serif); box-shadow: 0 2px 12px #102b290d; }
     .hint.error { color: #953d2a; border-color: #e5baa9; }
+    .tile-status { display: flex; align-items: center; gap: 10px; }
+    .tile-status.error { align-items: flex-start; }
+    .tile-status strong { display: block; }
+    .tile-status p { margin: 3px 0 7px; font-weight: 400; }
+    .tile-status small { display: block; max-width: 280px; margin-top: 3px; font-size: 11px; font-weight: 400; }
+    .retry { border: 1px solid currentColor; background: white; color: #953d2a; }
+    .spinner { flex: 0 0 auto; width: 15px; height: 15px; border: 2px solid #bfd9d0;
+      border-top-color: #176d5c; border-radius: 50%; animation: spin .8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
     .maplibregl-ctrl-top-right { top: 6px; right: 6px; }
     .maplibregl-ctrl-attrib { font-size: 10px; }
     @media (max-width: 520px) {
@@ -92,10 +115,27 @@ export class SampleSiftMap extends LitElement {
   `];
 
   samples: Sample[] = [];
+  tileSource: CollectionTileSource | undefined;
+  selectionModes: readonly ('rectangle' | 'polygon')[] = ['rectangle', 'polygon'];
   selection: Polygon | null = null;
   mapStyle?: StyleSpecification | string;
 
   private _mode: SelectionMode = 'select';
+  private _tileProtocol = `samplesift-${Date.now().toString(36)}-${++tileProtocolSequence}-${Math.random().toString(36).slice(2)}`;
+  private _tilePending = 0;
+  private _tileRequestError = '';
+  private _tileRenderError = '';
+  private _tilesRendering = false;
+  private _hasLoadedTiles = false;
+  private _tileLoader = createCollectionTileLoader(this._tileProtocol, globalThis.fetch, {
+    requestDelayMs: 150,
+    onStatus: (status) => {
+      this._tilePending = status.pending;
+      this._tileRequestError = status.error ?? '';
+    },
+  });
+  private _tileProtocolRegistered = false;
+  private _collectionSourceId: string | undefined;
   private _ready = false;
   private _error = '';
   private _map?: MapLibreMap;
@@ -121,11 +161,13 @@ export class SampleSiftMap extends LitElement {
   }
 
   protected updated(changed: PropertyValues<this>): void {
+    if (changed.has('selectionModes') && this._mode !== 'select' && !this.selectionModes.includes(this._mode)) this.setMode('select');
     if (changed.has('mapStyle') && this._map) {
       this._unmountMap();
       this._mountMap();
       return;
     }
+    if (changed.has('tileSource') && this._ready) this._replaceDataLayers();
     if (changed.has('samples')) this._updateSamples();
     if (changed.has('selection')) {
       // A host-supplied region supersedes an unfinished gesture without emitting an event.
@@ -137,6 +179,7 @@ export class SampleSiftMap extends LitElement {
   /** Switch tools without changing the current committed selection. */
   setMode(mode: SelectionMode): void {
     if (!['rectangle', 'polygon', 'select'].includes(mode)) return;
+    if (mode !== 'select' && !this.selectionModes.includes(mode)) return;
     this._mode = mode;
     this._error = '';
     if (this._draw?.enabled) {
@@ -156,6 +199,7 @@ export class SampleSiftMap extends LitElement {
 
   /** Fit only the provided sample page, never implying coverage of the full result set. */
   fitSamples(): void {
+    if (this.tileSource) return;
     if (!this._map || !this._ready) {
       this._pendingFit = true;
       return;
@@ -206,10 +250,30 @@ export class SampleSiftMap extends LitElement {
       map.keyboard.disableRotation();
       map.addControl(new NavigationControl({ showCompass: false }), 'top-right');
       map.getCanvas().setAttribute('aria-label', 'Sample locations map. Use arrow keys to pan and plus or minus to zoom.');
-      map.on('error', () => {
-        if (this._map !== map) return;
+      map.on('error', (event) => {
+        if (this._map !== map || (event.error as { name?: string } | undefined)?.name === 'AbortError') return;
+        const sourceId = (event as unknown as { sourceId?: string }).sourceId;
+        if (sourceId === this._collectionSourceId && this._collectionSourceId) {
+          // Transport failures already carry a useful message. Decode/render failures
+          // also need the same retry path, without being confused with basemap errors.
+          if (!this._tileRequestError) this._tileRenderError = 'Location tiles could not be displayed. Retry to load locations.';
+          this._tilesRendering = false;
+          return;
+        }
+        // Late failures from a removed collection revision are irrelevant.
+        if (sourceId?.startsWith('samplesift-collection-')) return;
         this._error = 'Some map content could not load. Check your connection or map style.';
       });
+      map.on('sourcedataloading', (event) => {
+        if (this._map === map && event.sourceId === this._collectionSourceId) this._tilesRendering = true;
+      });
+      const updateTileLoading = (event: { sourceId: string }) => {
+        if (this._map !== map || !this._collectionSourceId || event.sourceId !== this._collectionSourceId) return;
+        this._tilesRendering = !map.isSourceLoaded(this._collectionSourceId);
+        if (!this._tilesRendering && !this._tileRequestError && !this._tileRenderError) this._hasLoadedTiles = true;
+      };
+      map.on('sourcedata', updateTileLoading);
+      map.on('sourcedataabort', updateTileLoading);
       map.once('load', () => {
         if (generation !== this._generation || this._map !== map || !this.isConnected) return;
         try {
@@ -224,9 +288,11 @@ export class SampleSiftMap extends LitElement {
             const feature = draw.getSnapshotFeature(id);
             if (feature?.geometry.type !== 'Polygon') return;
             const geometry = clonePolygon(feature.geometry);
+            const completedMode = this._mode;
             // Wait until Terra Draw finishes its own commit before clearing transient drawing features.
             queueMicrotask(() => {
               if (this._draw !== draw || generation !== this._generation) return;
+              if (completedMode !== 'select' && !this.selectionModes.includes(completedMode)) return;
               try {
                 validatePolygon(geometry);
                 this.selection = geometry;
@@ -272,25 +338,128 @@ export class SampleSiftMap extends LitElement {
       id: 'samplesift-selection-outline', source: SELECTION_SOURCE, type: 'line',
       paint: { 'line-color': '#18745f', 'line-width': 2.5, 'line-dasharray': [3, 2] },
     });
-    map.addSource(SAMPLE_SOURCE, { type: 'geojson', data: emptyCollection(), promoteId: 'accession' });
-    map.addLayer({
-      id: SAMPLE_LAYER, source: SAMPLE_SOURCE, type: 'circle',
-      paint: {
-        'circle-radius': 5.5, 'circle-color': '#297c72', 'circle-opacity': 0.95,
-        'circle-stroke-color': '#ffffff', 'circle-stroke-width': 1.6,
-      },
-    });
+    this._replaceDataLayers();
     map.on('click', SAMPLE_LAYER, this._onSampleClick);
-    map.on('mouseenter', SAMPLE_LAYER, () => {
-      if (this._mode === 'select') map.getCanvas().style.cursor = 'pointer';
-    });
-    map.on('mouseleave', SAMPLE_LAYER, () => {
-      if (this._mode === 'select') map.getCanvas().style.cursor = '';
-    });
+    map.on('click', CLUSTER_LAYER, this._onClusterClick);
+    for (const layer of [SAMPLE_LAYER, CLUSTER_LAYER]) {
+      map.on('mouseenter', layer, () => {
+        if (this._mode === 'select') map.getCanvas().style.cursor = 'pointer';
+      });
+      map.on('mouseleave', layer, () => {
+        if (this._mode === 'select') map.getCanvas().style.cursor = '';
+      });
+    }
   }
+
+  /** Replace only data layers, preserving the viewport, drawing tools and committed region. */
+  private _replaceDataLayers(): void {
+    const map = this._map;
+    if (!map) return;
+    this._tileLoader.clear();
+    this._tileRenderError = '';
+    this._tilesRendering = false;
+    this._hasLoadedTiles = false;
+    for (const layer of [CLUSTER_LABEL_LAYER, CLUSTER_LAYER, SAMPLE_LAYER]) {
+      if (map.getLayer(layer)) map.removeLayer(layer);
+    }
+    if (this._collectionSourceId && map.getSource(this._collectionSourceId)) map.removeSource(this._collectionSourceId);
+    if (map.getSource(SAMPLE_SOURCE)) map.removeSource(SAMPLE_SOURCE);
+    this._collectionSourceId = undefined;
+    this._error = '';
+    try {
+      if (this.tileSource) {
+        const tile = this._tileLoader.setSource(this.tileSource);
+        if (!this._tileProtocolRegistered) {
+          addProtocol(this._tileProtocol, this._tileLoader.load);
+          this._tileProtocolRegistered = true;
+        }
+        const sourceId = `samplesift-collection-${tile.revision}`;
+        this._collectionSourceId = sourceId;
+        this._tilesRendering = true;
+        map.addSource(sourceId, {
+          type: 'vector', tiles: [tile.urlTemplate],
+          minzoom: tile.minZoom, maxzoom: tile.maxZoom,
+          promoteId: 'source_pk',
+        });
+        map.addLayer({
+          id: SAMPLE_LAYER, source: sourceId, 'source-layer': tile.sourceLayer, type: 'circle',
+          filter: ['!=', ['get', 'cluster'], true],
+          paint: {
+            'circle-radius': 5.5, 'circle-color': '#297c72', 'circle-opacity': 0.95,
+            'circle-stroke-color': '#ffffff', 'circle-stroke-width': 1.6,
+          },
+        });
+        map.addLayer({
+          id: CLUSTER_LAYER, source: sourceId, 'source-layer': tile.sourceLayer, type: 'circle',
+          filter: ['==', ['get', 'cluster'], true],
+          paint: {
+            'circle-radius': ['step', ['to-number', ['get', 'point_count'], 0], 16, 100, 20, 1000, 25],
+            'circle-color': '#176d5c', 'circle-opacity': 0.94,
+            'circle-stroke-color': '#ffffff', 'circle-stroke-width': 1.5,
+          },
+        });
+        map.addLayer({
+          id: CLUSTER_LABEL_LAYER, source: sourceId, 'source-layer': tile.sourceLayer, type: 'symbol',
+          filter: ['==', ['get', 'cluster'], true],
+          layout: {
+            'text-field': ['to-string', ['get', 'point_count']], 'text-font': ['sans-serif'],
+            'text-size': 11, 'text-allow-overlap': true,
+          },
+          paint: { 'text-color': '#ffffff' },
+        });
+      } else {
+        if (this._tileProtocolRegistered) {
+          removeProtocol(this._tileProtocol);
+          this._tileProtocolRegistered = false;
+        }
+        map.addSource(SAMPLE_SOURCE, { type: 'geojson', data: emptyCollection(), promoteId: 'accession' });
+        map.addLayer({
+          id: SAMPLE_LAYER, source: SAMPLE_SOURCE, type: 'circle',
+          paint: {
+            'circle-radius': 5.5, 'circle-color': '#297c72', 'circle-opacity': 0.95,
+            'circle-stroke-color': '#ffffff', 'circle-stroke-width': 1.6,
+          },
+        });
+        this._updateSamples();
+      }
+      this._updatePointStyles();
+    } catch (error) {
+      this._tilesRendering = false;
+      if (this.tileSource) this._tileRenderError = error instanceof Error ? error.message : 'Location tiles could not be loaded.';
+      else this._error = error instanceof Error ? error.message : 'The map data source could not initialise.';
+    }
+  }
+
+  /** Re-fetch the current filtered tiles while preserving the camera and selection. */
+  retryTiles(): void {
+    if (!this.tileSource || !this._ready) return;
+    this._replaceDataLayers();
+  }
+
+  private _onClusterClick = (event: MapLayerMouseEvent): void => {
+    if (this._mode !== 'select' || !this._map) return;
+    const geometry = event.features?.[0]?.geometry;
+    if (geometry?.type !== 'Point') return;
+    const [longitude, latitude] = geometry.coordinates;
+    this._map.easeTo({
+      center: [longitude, latitude],
+      zoom: Math.min(this._map.getZoom() + 2, this._map.getMaxZoom()), duration: 300,
+    });
+  };
 
   private _onSampleClick = (event: MapLayerMouseEvent): void => {
     if (this._mode !== 'select') return;
+    if (this._collectionSourceId) {
+      const feature = event.features?.[0];
+      const id = feature?.properties?.source_pk;
+      if (!feature || (typeof id !== 'string' && typeof id !== 'number')) return;
+      this.selectSample(String(id));
+      this.dispatchEvent(new CustomEvent<CollectionFeatureClickDetail>('featureclick', {
+        detail: { id: String(id), properties: structuredClone(feature.properties), geometry: structuredClone(feature.geometry) },
+        bubbles: true, composed: true,
+      }));
+      return;
+    }
     const accession = event.features?.[0]?.properties?.accession;
     const sample = this.samples.find((item) => item.accession === accession);
     if (!sample) return;
@@ -301,6 +470,7 @@ export class SampleSiftMap extends LitElement {
   };
 
   private _updateSamples(): void {
+    if (this.tileSource) return;
     const source = this._map?.getSource(SAMPLE_SOURCE) as GeoJSONSource | undefined;
     if (!source) return;
     const data: FeatureCollection<Point> = {
@@ -320,8 +490,9 @@ export class SampleSiftMap extends LitElement {
   private _updatePointStyles(): void {
     if (!this._map?.getLayer(SAMPLE_LAYER)) return;
     const selected = this._selectedAccession ?? '';
-    this._map.setPaintProperty(SAMPLE_LAYER, 'circle-radius', ['case', ['==', ['get', 'accession'], selected], 8, 5.5]);
-    this._map.setPaintProperty(SAMPLE_LAYER, 'circle-color', ['case', ['==', ['get', 'accession'], selected], '#d08531', '#297c72']);
+    const property = this._collectionSourceId ? 'source_pk' : 'accession';
+    this._map.setPaintProperty(SAMPLE_LAYER, 'circle-radius', ['case', ['==', ['get', property], selected], 8, 5.5]);
+    this._map.setPaintProperty(SAMPLE_LAYER, 'circle-color', ['case', ['==', ['get', property], selected], '#d08531', '#297c72']);
   }
 
   private _updateSelection(): void {
@@ -364,38 +535,60 @@ export class SampleSiftMap extends LitElement {
     } finally {
       this._draw = undefined;
       this._map = undefined;
-      map?.remove();
-      this._ready = false;
+      try {
+        map?.remove();
+      } finally {
+        this._tileLoader.clear();
+        this._tileRenderError = '';
+        this._tilesRendering = false;
+        this._hasLoadedTiles = false;
+        this._collectionSourceId = undefined;
+        if (this._tileProtocolRegistered) {
+          removeProtocol(this._tileProtocol);
+          this._tileProtocolRegistered = false;
+        }
+        this._ready = false;
+      }
     }
   }
 
   protected render() {
+    const selectionHint = this.selectionModes.length === 0
+      ? 'Pan or zoom to explore matching features.'
+      : `Draw a ${this.selectionModes.join(' or ')} to explore features in a region.`;
     const hint = this._error || (!this._ready ? 'Loading map…' : this._mode === 'rectangle'
       ? 'Click two opposite corners to select a rectangle.'
       : this._mode === 'polygon'
         ? 'Click to add corners. Click the first point to finish your polygon.'
         : this.selection ? 'Region selected. Draw a new region to replace it, or clear to search everywhere.'
-          : 'Draw a rectangle or polygon to explore samples in a region.');
+          : selectionHint);
+    const tileError = this.tileSource ? this._tileRequestError || this._tileRenderError : '';
+    const tilesLoading = Boolean(this.tileSource && (this._tilePending > 0 || this._tilesRendering));
     return html`
       <div class="surface">
-        <div class="map" part="map"></div>
+        <div class="map" part="map" aria-busy=${tilesLoading}></div>
         <div class="toolbar" role="group" aria-label="Map selection tools">
           <button type="button" aria-label="Pan map" aria-pressed=${this._mode === 'select'}
             ?disabled=${!this._ready} @click=${() => this.setMode('select')}>
             <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2v16M2 10h16M7 5l3-3 3 3M7 15l3 3 3-3M5 7l-3 3 3 3M15 7l3 3-3 3"/></svg>Pan
           </button>
-          <button type="button" aria-pressed=${this._mode === 'rectangle'} ?disabled=${!this._ready}
+          ${this.selectionModes.includes('rectangle') ? html`<button type="button" aria-pressed=${this._mode === 'rectangle'} ?disabled=${!this._ready}
             @click=${() => this.setMode('rectangle')}>
             <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4" width="14" height="12" rx="1"/></svg>Rectangle
-          </button>
-          <button type="button" aria-pressed=${this._mode === 'polygon'} ?disabled=${!this._ready}
+          </button>` : nothing}
+          ${this.selectionModes.includes('polygon') ? html`<button type="button" aria-pressed=${this._mode === 'polygon'} ?disabled=${!this._ready}
             @click=${() => this.setMode('polygon')}>
             <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m4 4 11-1 3 10-8 5-8-7Z"/></svg>Polygon
-          </button>
+          </button>` : nothing}
           <button type="button" class="clear" ?disabled=${!this._ready || (!this.selection && this._mode === 'select')}
             @click=${() => this.clearSelection()}>Clear</button>
         </div>
-        <div class="hint ${this._error ? 'error' : ''}" role="status" aria-live="polite">${hint}</div>
+        ${tileError ? html`<div class="hint tile-status error" role="alert" data-testid="tile-error">
+          <div><strong>Map locations could not load.</strong><p>${tileError} Some locations may be missing.</p>
+            <button type="button" class="retry" @click=${this.retryTiles}>Retry map tiles</button></div>
+        </div>` : tilesLoading ? html`<div class="hint tile-status" role="status" aria-live="polite" data-testid="tile-loading">
+          <span class="spinner" aria-hidden="true"></span><span>${this._hasLoadedTiles ? html`Updating map detail…<small>Cluster counts may still reflect the previous view.</small>` : 'Loading map locations…'}</span>
+        </div>` : html`<div class="hint ${this._error ? 'error' : ''}" role="status" aria-live="polite">${hint}</div>`}
       </div>
     `;
   }
