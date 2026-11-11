@@ -31,7 +31,7 @@ export class SampleSiftCollection extends LitElement {
   mapStyle?: StyleSpecification | string;
   pageSize = 25;
   paused = false;
-  filterMode: 'auto' | 'manual' = 'auto';
+  filterMode: 'auto' | 'manual' = 'manual';
   filterDebounceMs = 500;
   private _restoreRevision = 0;
   private _metadata?: CollectionMetadata;
@@ -74,7 +74,7 @@ export class SampleSiftCollection extends LitElement {
     if (this._metadata) validateCollectionState(state, this._metadata, this.options?.spatial);
     this._dirty = false;
     this._restoreRevision++;
-    this.state = structuredClone(state);
+    if (JSON.stringify(this.state) !== JSON.stringify(state)) this.state = structuredClone(state);
   }
 
   private async initialize() {
@@ -217,7 +217,7 @@ export class SampleSiftCollection extends LitElement {
     const total = this._result?.total;
     const pageLimit = this._result?.limit ?? this.pageSize;
     const pageOffset = this._result?.offset ?? this._offset;
-    const disabled = this.paused || this._loading;
+    const disabled = this.paused || this._loading || Boolean(this._error);
     const chips = summarizeCollectionFilters(Array.isArray(this.state.predicates) ? this.state.predicates : [], metadata.fields);
     const nextDisabled = disabled || !this._result || (total === undefined ? items.length < pageLimit : pageOffset + pageLimit >= total);
     const columns = metadata.resultColumns;
@@ -230,25 +230,24 @@ export class SampleSiftCollection extends LitElement {
         </div>
         ${metadata.diagnostics.length ? html`<details class="notice"><summary>Collection capabilities</summary><ul>${metadata.diagnostics.map(issue => html`<li>${issue}</li>`)}</ul></details>` : nothing}
         <sample-sift-collection-filter-form .metadata=${metadata} .predicates=${this.state.predicates} .disabled=${this.paused}
-          .autoApply=${this.filterMode !== 'manual'} .debounceMs=${this.filterDebounceMs} .busy=${this._loading} .restoreRevision=${this._restoreRevision}
+          .autoApply=${this.filterMode === 'auto'} .debounceMs=${this.filterDebounceMs} .busy=${this._loading} .restoreRevision=${this._restoreRevision}
           @predicateschange=${this.onPredicates} @draftchange=${this.onDraft}></sample-sift-collection-filter-form>
       </aside>
       <main>
         <sample-sift-map .tileSource=${this._tileSource} .selection=${this.state.selection} .selectionModes=${modes}
           .mapStyle=${this.mapStyle} @selectionchange=${this.onSelection} @featureclick=${this.onFeature}></sample-sift-map>
-        <div class="caption">${this.options?.tiles ? 'Map tiles show the filtered collection; clusters show record counts. Table pagination does not change the map.' : 'No vector-tile layer configured. Records are available in the table.'}</div>
+        <div class="caption">${this.options?.tiles ? 'The map shows all matching locations. Cluster labels count records; zoom in to explore.' : 'No vector-tile layer configured. Records are available in the table.'}</div>
         ${this._activeFeature ? html`<details class="feature" open><summary>Selected record</summary><dl>${Object.entries(this._activeFeature).filter(([key]) => !['geometry', 'cluster', 'cluster_id', 'point_count'].includes(key)).map(([key, value]) => html`<dt>${key}</dt><dd>${this.format(value)}</dd>`)}</dl></details>` : nothing}
         <section class="results" aria-busy=${this._loading}>
           <div class="heading"><div><div class="kicker">MATCHING RECORDS</div><div class="count-line"><h3 data-testid="collection-count" aria-live="polite">${this.paused ? 'Search paused' : !this._result && this._loading ? 'Finding records…' : !this._result && this._error ? 'Search unavailable' : total === undefined ? `${items.length} records on this page` : `${total.toLocaleString()} ${total === 1 ? 'record' : 'records'}`}</h3>
               ${this._loading && this._result ? html`<span class="updating" role="status">Updating…</span>` : nothing}</div></div>
             <label>Sort<select aria-label="Sort records" ?disabled=${this.paused} .value=${this.state.sort[0] ?? ''} @change=${(event: Event) => this.commit({ ...this.state, sort: (event.target as HTMLSelectElement).value ? [(event.target as HTMLSelectElement).value] : [] })}>
-              <option value="">Default order</option>${metadata.sortValues.map(value => html`<option value=${value}>${value.startsWith('-') ? `${value.slice(1)} descending` : `${value} ascending`}</option>`)}
+              <option value="">Default order</option>${metadata.sortValues.map(value => html`<option value=${value}>${fieldLabel(metadata.fields.find(field => field.name === value.replace(/^-/, '')) ?? { name: value.replace(/^-/, '') })} ${value.startsWith('-') ? 'descending' : 'ascending'}</option>`)}
             </select></label>
           </div>
           ${chips.length || this.state.selection ? html`<div class="applied" aria-label="Applied filters">
             <div class="chips">${this.state.selection ? html`<span class="chip region-chip"><span>Selected region</span><button aria-label="Remove selected region" ?disabled=${this.paused} @click=${this.clearRegion}>×</button></span>` : nothing}
-              ${chips.map(chip => html`<span class="chip"><button class="chip-edit" aria-label=${`Edit ${chip.label} filter`} title=${chip.summary} ?disabled=${this.paused} @click=${() => this.editFilter(chip.field)}>${chip.summary}</button><button aria-label=${`Remove applied ${chip.label} filter`} ?disabled=${this.paused} @click=${() => this.removeFilter(chip.field)}>×</button></span>`)}</div>
-            ${chips.length ? html`<button class="clear-applied" ?disabled=${this.paused} @click=${this.clearFilters}>Clear filters</button>` : nothing}
+              ${chips.map(chip => html`<span class="chip"><button class="chip-edit" aria-label=${`Edit ${chip.label} filter`} aria-description=${chip.summary} title=${chip.summary} ?disabled=${this.paused} @click=${() => this.editFilter(chip.field)}>${chip.summary}</button><button aria-label=${`Remove applied ${chip.label} filter`} aria-description=${chip.summary} ?disabled=${this.paused} @click=${() => this.removeFilter(chip.field)}>×</button></span>`)}</div>
           </div>` : nothing}
           ${this._dirty ? html`<p class="draft-note" role="status">Showing applied filters while you edit.</p>` : nothing}
           ${this._error ? html`<div class="error" role="alert">${this._error}${this._result ? html`<p>Your previous results are still shown below.</p>` : nothing}<button @click=${() => this.refresh()}>Retry search</button></div>` : nothing}
@@ -278,7 +277,7 @@ export class SampleSiftCollection extends LitElement {
     .region{display:grid;gap:7px;background:#edf3e9;border:1px solid #dce6d5;padding:13px;border-radius:7px;margin:20px 0}.region span{font-size:11px;color:#63795f}
     .region button{justify-self:start;font-size:11px}main{min-width:0}sample-sift-map{display:block;height:420px}.caption{padding:10px 18px;background:#f8faf6;color:#71826c;font-size:11px;border-bottom:1px solid #e1e7dc}
     .heading{padding:22px;display:flex;justify-content:space-between;gap:16px;align-items:center}h3{font-size:25px;font-weight:550;margin:7px 0 0;letter-spacing:-.5px}.heading label{font-size:11px;color:#60775c;display:grid;gap:4px}select{max-width:180px;padding:6px;border:1px solid #d8e1d4;border-radius:5px;background:white;color:#295d49}
-    .applied{display:flex;align-items:flex-start;gap:10px;padding:0 22px 16px}.chips{display:flex;flex-wrap:wrap;gap:7px;flex:1;min-width:0}.chip{display:inline-flex;align-items:center;max-width:100%;border:1px solid #d5e5db;background:#eff6f1;border-radius:16px;color:#285b48;font-size:11px;overflow:hidden}.chip button{border:0;background:transparent;padding:5px 9px;font-size:11px;border-radius:0;min-height:29px}.chip .chip-edit{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:310px;text-align:left}.chip button:last-child{font-size:17px;padding:2px 9px;border-left:1px solid #d5e5db}.region-chip>span{padding:5px 10px}.clear-applied{border:0;background:transparent;padding:4px 0;text-decoration:underline;font-size:11px;white-space:nowrap}.draft-note{margin:0 22px 14px;color:#71826c;font-size:11px}.empty strong{display:block;font-size:15px;color:#3d5746}.empty p{margin:6px 0 13px}.empty>div{display:flex;justify-content:center;gap:8px;flex-wrap:wrap}
+    .applied{display:flex;align-items:flex-start;gap:10px;padding:0 22px 16px}.chips{display:flex;flex-wrap:wrap;gap:7px;flex:1;min-width:0}.chip{display:inline-flex;align-items:center;max-width:100%;border:1px solid #d5e5db;background:#eff6f1;border-radius:16px;color:#285b48;font-size:11px;overflow:hidden}.chip button{border:0;background:transparent;padding:5px 9px;font-size:11px;border-radius:0;min-height:29px}.chip .chip-edit{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:310px;text-align:left}.chip button:last-child{font-size:17px;padding:2px 9px;border-left:1px solid #d5e5db}.region-chip>span{padding:5px 10px}.draft-note{margin:0 22px 14px;color:#71826c;font-size:11px}.empty strong{display:block;font-size:15px;color:#3d5746}.empty p{margin:6px 0 13px}.empty>div{display:flex;justify-content:center;gap:8px;flex-wrap:wrap}
     .table-wrap{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:11px;text-align:left}th{white-space:nowrap;text-transform:uppercase;letter-spacing:.06em;font-size:9px;color:#718269;background:#f8faf6;padding:11px 14px;border-block:1px solid #e1e7dc}td{padding:11px 14px;border-bottom:1px solid #e9eee5;max-width:220px;overflow-wrap:anywhere}td span{display:block;max-width:200px;max-height:6em;overflow:auto}.record-id{border:0;padding:0;font-size:10px;background:transparent;text-align:left;overflow-wrap:anywhere;min-width:130px}.selected{background:#edf5e9}
     .pagination{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;gap:12px;font-size:11px;color:#73836d}.pagination>div{display:flex;gap:7px}.pagination button{font-size:11px}
     .notice{font-size:11px;color:#806235;background:#fff8e9;padding:10px 13px;margin:12px 0}.results>.notice{margin:0 20px 15px}.error{color:#963f28;background:#fff5ef;padding:18px}.error button{display:block;margin-top:10px}.empty{padding:28px;text-align:center;color:#73836d}

@@ -81,6 +81,7 @@ async function open(page: Page, cap?: number, mode: 'auto' | 'manual' = 'manual'
   await expect(first.getByTestId('collection-count')).toHaveText('6 records');
   await expect(second.getByTestId('collection-count')).toHaveText('6 records');
   if (mode === 'manual') await manualMode(first, second);
+  else await autoMode(first, second);
   await expect(first.getByRole('button', { name: 'Add filter', exact: true })).toBeVisible();
   return { first, second, ...calls };
 }
@@ -91,6 +92,15 @@ async function manualMode(...explorers: Locator[]) {
       await element.updateComplete;
     });
     await expect(explorer.getByRole('button', { name: 'Apply filters', exact: true })).toBeVisible();
+  }
+}
+async function autoMode(...explorers: Locator[]) {
+  for (const explorer of explorers) {
+    await explorer.evaluate(async (element: SampleSift) => {
+      element.filterMode = 'auto';
+      await element.updateComplete;
+    });
+    await expect(explorer.getByRole('button', { name: 'Apply filters', exact: true })).toHaveCount(0);
   }
 }
 const filterCard = (explorer: Locator, label: string) => explorer.getByRole('group', { name: `${label} filter`, exact: true });
@@ -170,7 +180,7 @@ test('dates preserve pre-1900 values and reject invalid calendar dates', async (
   expect(queries.length).toBe(calls);
   await date.getByRole('textbox', { name: 'Value', exact: true }).fill('2024-02-29');
   await first.getByRole('button', { name: 'Apply filters', exact: true }).click();
-  await expect(first.getByTestId('collection-count')).toHaveText('1 records');
+  await expect(first.getByTestId('collection-count')).toHaveText('1 record');
 });
 
 test('polygon and filters restore atomically and silently using advertised geometry', async ({ page }) => {
@@ -186,7 +196,7 @@ test('polygon and filters restore atomically and silently using advertised geome
   expect(queries.at(-1)?.filter?.op).toBe('and');
   expect(queries.at(-1)?.filter?.args).toContainEqual({ op: 's_intersects', args: [{ property: 'geometry' }, selection] });
   expect(queries.at(-1)?.filter?.args).toContainEqual({ op: '>=', args: [{ property: 'depth' }, 100] });
-  await expect(filterCard(first, 'Depth').getByLabel('Value', { exact: true })).toHaveValue('100');
+  await expect(filterCard(first, 'Depth').getByLabel('Minimum', { exact: true })).toHaveValue('100');
   expect(await page.evaluate(() => (window as unknown as { collectionEvents: unknown[] }).collectionEvents)).toEqual([]);
 });
 
@@ -335,7 +345,7 @@ test('delayed tile errors retry without changing the camera, region, filters or 
       selection: structuredClone(element.selection), body: structuredClone(element.tileSource.body),
     }))).toEqual(before);
     expect(queries).toHaveLength(tableCalls);
-    await expect(filterCard(first, 'Depth').getByLabel('Value', { exact: true })).toHaveValue('50');
+    await expect(filterCard(first, 'Depth').getByLabel('Minimum', { exact: true })).toHaveValue('50');
     await expect(first.getByLabel('Sort records')).toHaveValue('-depth');
     await expect(first.getByTestId('collection-count')).toHaveText('3 records');
     await expect(second.getByTestId('tile-error')).toHaveCount(0);
@@ -433,7 +443,7 @@ test('superseded tile failures cannot affect new filters or another pending inst
   } finally { old.resolve(); other.resolve(); }
 });
 
-test('default auto filtering debounces typing once and preserves text focus and caret after acknowledgement', async ({ page }) => {
+test('opt-in auto filtering debounces typing once and preserves text focus and caret after acknowledgement', async ({ page }) => {
   const { first, second, queries } = await open(page, undefined, 'auto');
   await expect(first.getByRole('button', { name: 'Apply filters', exact: true })).toHaveCount(0);
   const before = queries.length;
@@ -493,15 +503,16 @@ test('auto filtering keeps applied results usable while invalid ranges, dates an
   expect(queries.at(-1)?.filter).toBeUndefined();
 });
 
-test('map and sort changes preserve a pending filter draft; individual removal and clear keep other search state', async ({ page }) => {
-  const { first, second, queries } = await open(page, undefined, 'auto');
-  await first.evaluate(async (element: SampleSift) => {
-    element.filterDebounceMs = 2_000;
-    await element.updateComplete;
-  });
+test('manual drafts survive map and sort changes; Apply, Discard and removal preserve the search contract', async ({ page }) => {
+  const { first, second, queries } = await open(page);
+  const beforeTyping = queries.length;
   const depth = await addFilter(first, 'Depth');
   await depth.getByLabel('Minimum', { exact: true }).fill('100');
   await depth.getByLabel('Maximum', { exact: true }).fill('200');
+  await page.waitForTimeout(650);
+  expect(queries).toHaveLength(beforeTyping);
+  await expect(depth.getByLabel('Maximum', { exact: true })).toBeFocused();
+  await expect(first.getByTestId('collection-count')).toHaveText('6 records');
   await first.getByLabel('Sort records').selectOption('-depth');
   await expect.poll(() => queries.at(-1)?.sort).toEqual(['-depth']);
   await expect(depth.getByLabel('Minimum', { exact: true })).toHaveValue('100');
@@ -509,7 +520,10 @@ test('map and sort changes preserve a pending filter draft; individual removal a
   await first.locator('sample-sift-map').evaluate((element, selection) => {
     element.dispatchEvent(new CustomEvent('selectionchange', { detail: { geometry: selection }, bubbles: true, composed: true }));
   }, selection);
+  await expect(first.getByTestId('collection-count')).toHaveText('4 records');
   await expect(depth.getByLabel('Maximum', { exact: true })).toHaveValue('200');
+  expect(queries.at(-1)?.filter).toEqual({ op: 's_intersects', args: [{ property: 'geometry' }, selection] });
+  await first.getByRole('button', { name: 'Apply filters', exact: true }).click();
   await expect(first.getByTestId('collection-count')).toHaveText('2 records');
   const applied = await first.evaluate((element: SampleSift) => element.collectionState);
   expect(applied.predicates).toEqual([
@@ -519,15 +533,24 @@ test('map and sort changes preserve a pending filter draft; individual removal a
   expect(applied.sort).toEqual(['-depth']);
   expect(applied.selection).toEqual(selection);
 
-  await first.evaluate((element: SampleSift) => { element.filterDebounceMs = 100; });
+  const beforeDiscard = queries.length;
+  await depth.getByLabel('Minimum', { exact: true }).fill('125');
+  await first.getByRole('button', { name: 'Discard changes', exact: true }).click();
+  await expect(depth.getByLabel('Minimum', { exact: true })).toHaveValue('100');
+  expect(queries).toHaveLength(beforeDiscard);
   const name = await condition(first, 'Name', '=');
   await name.getByRole('textbox', { name: 'Value', exact: true }).fill('Record 2');
+  await first.getByRole('button', { name: 'Apply filters', exact: true }).click();
   await expect(first.getByTestId('collection-count')).toContainText('1 record');
+  const beforeRemoval = queries.length;
   await depth.getByRole('button', { name: 'Remove Depth filter', exact: true }).click();
   await expect(depth).toHaveCount(0);
+  expect(queries).toHaveLength(beforeRemoval);
+  await first.getByRole('button', { name: 'Apply filters', exact: true }).click();
   await expect.poll(() => first.evaluate((element: SampleSift) => element.collectionState.predicates)).toEqual([
     { field: 'name', operator: '=', value: 'Record 2' },
   ]);
+  await expect.poll(() => queries.length).toBe(beforeRemoval + 1);
   await first.getByRole('button', { name: 'Clear filters', exact: true }).click();
   await expect(first.getByTestId('collection-count')).toHaveText('4 records');
   const cleared = await first.evaluate((element: SampleSift) => element.collectionState);
@@ -543,6 +566,7 @@ test('Back cancels an uncommitted auto-filter timer even when that widget’s ap
   const left = page.locator('#left'), right = page.locator('#right');
   await expect(left.getByTestId('collection-count')).toHaveText('6 records');
   await expect(right.getByTestId('collection-count')).toHaveText('6 records');
+  await autoMode(left, right);
   await page.evaluate(() => history.replaceState({ host: 'keep-auto' }, ''));
   const leftDepth = await condition(left, 'Depth', '>=');
   await leftDepth.getByLabel('Value', { exact: true }).fill('50');
@@ -553,7 +577,7 @@ test('Back cancels an uncommitted auto-filter timer even when that widget’s ap
   await leftDepth.getByLabel('Value', { exact: true }).fill('100');
   await page.goBack();
   await expect(right.getByTestId('collection-count')).toHaveText('6 records');
-  await expect(leftDepth.getByLabel('Value', { exact: true })).toHaveValue('50');
+  await expect(leftDepth.getByLabel('Minimum', { exact: true })).toHaveValue('50');
   await page.waitForTimeout(650);
   await expect(left.getByTestId('collection-count')).toHaveText('5 records');
   expect(await page.evaluate(() => (window as unknown as { collectionEvents: unknown[] }).collectionEvents.length)).toBe(2);
@@ -567,4 +591,71 @@ test('Back cancels an uncommitted auto-filter timer even when that widget’s ap
   await page.goForward();
   await expect(right.getByTestId('collection-count')).toContainText('1 record');
   expect(await page.evaluate(() => (window as unknown as { collectionEvents: unknown[] }).collectionEvents.length)).toBe(2);
+});
+
+test('failed updates and retries retain the last successful table with an explicit previous-results message', async ({ page }) => {
+  const { first, second } = await open(page);
+  await first.getByLabel('Next collection page').click();
+  await expect(first.locator('tbody tr').first()).toHaveAttribute('data-record-id', 'C');
+  const failure = deferred();
+  const attempts: CollectionQuery[] = [];
+  let phase: 'fail' | 'recover' = 'fail';
+  let failedRequests = 0;
+  await page.route('**/samplesift/collections/occurrences/results', async route => {
+    const query = route.request().postDataJSON() as CollectionQuery;
+    if (depthPredicateValue(query) !== 50) return route.fallback();
+    attempts.push(query);
+    if (phase === 'recover') return route.fallback();
+    failedRequests++;
+    await failure.promise;
+    await route.fulfill({ status: 503, json: { detail: 'Temporary collection outage' } }).catch(() => {});
+  });
+  try {
+    await applyDepth(first, '50');
+    await expect.poll(() => failedRequests).toBe(1);
+    await expect(first.getByText('Updating…', { exact: true })).toBeVisible();
+    await expect(first.getByTestId('collection-count')).toHaveText('6 records');
+    await expect(first.locator('tbody tr').first()).toHaveAttribute('data-record-id', 'C');
+    failure.resolve();
+    const error = first.getByRole('alert').filter({ hasText: 'HTTP 503' });
+    await expect(error).toContainText('previous results are still shown');
+    await expect(first.locator('tbody tr')).toHaveCount(2);
+    await expect(first.locator('tbody tr').first()).toHaveAttribute('data-record-id', 'C');
+    await expect(second.getByTestId('collection-count')).toHaveText('6 records');
+    await expect(first.getByLabel('Previous collection page')).toBeDisabled();
+    await expect(first.getByLabel('Next collection page')).toBeDisabled();
+    phase = 'recover';
+    await first.getByRole('button', { name: 'Retry search', exact: true }).click();
+    await expect(first.getByTestId('collection-count')).toHaveText('5 records');
+    await expect(first.locator('tbody tr').first()).toHaveAttribute('data-record-id', 'B');
+    await expect(error).toHaveCount(0);
+    expect(attempts.map(query => query.offset)).toEqual([0, 0]);
+    expect(await page.evaluate(() => (window as unknown as { collectionEvents: unknown[] }).collectionEvents.length)).toBe(1);
+  } finally { failure.resolve(); }
+});
+
+
+test('saved conditions outside the simple editor stay applied until their card is explicitly removed', async ({ page }) => {
+  const { first, queries } = await open(page);
+  await first.evaluate((element: SampleSift) => element.setCollectionState({
+    predicates: [
+      { field: 'depth', operator: '>', value: 10 },
+      { field: 'depth', operator: '<', value: 50 },
+      { field: 'name', operator: '<>', value: 'Record 0' },
+    ], sort: [], selection: null,
+  }));
+  await expect(first.getByTestId('collection-count')).toHaveText('0 records');
+  const depth = filterCard(first, 'Depth');
+  await expect(depth).toBeVisible();
+  await expect(filterCard(first, 'Name')).toBeVisible();
+  const before = queries.length;
+  await depth.getByRole('button', { name: 'Remove Depth filter', exact: true }).click();
+  await expect(depth).toHaveCount(0);
+  expect(queries).toHaveLength(before);
+  await expect(first.getByTestId('collection-count')).toHaveText('0 records');
+  await first.getByRole('button', { name: 'Apply filters', exact: true }).click();
+  await expect(first.getByTestId('collection-count')).toHaveText('5 records');
+  expect(queries).toHaveLength(before + 1);
+  expect(queries.at(-1)?.filter).toEqual({ op: '<>', args: [{ property: 'name' }, 'Record 0'] });
+  expect(await page.evaluate(() => (window as unknown as { collectionEvents: unknown[] }).collectionEvents.length)).toBe(1);
 });

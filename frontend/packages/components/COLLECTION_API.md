@@ -20,6 +20,8 @@ For object configuration, assign `collectionOptions`; it takes precedence over t
 | `collectionPaused` | `paused` |
 | `setCollectionState(state)` | `setState(state)` |
 | `collectionMetadata` | `metadata` |
+| `filterMode` (default `'manual'`) | `filterMode` |
+| `filterDebounceMs` (default `500`) | `filterDebounceMs` |
 
 Both expose the collection events below. The remaining code examples use the **direct element**. Import the package and assign `options` as a JavaScript property. `baseUrl` is the **API root**, including `/samplesift`; `collection` is an identifier beneath that root.
 
@@ -56,7 +58,13 @@ The component requests:
 
 The metadata parser reads primitive number, integer, string, date, and boolean fields. Operators come from each field's `x-samplesift.operators` capability list. The supported scalar subset is `=`, `<>`, `in`, `isNull`, `>`, `>=`, `<`, and `<=`. Unknown operators or unsupported schema constraints produce diagnostics and unavailable controls; they are not silently converted into weaker filters.
 
-Golem renders a fresh frontend-owned form definition derived from that parsed metadata. Backend-supplied UI expressions or widget definitions are not executed. Filters remain drafts until **Apply filters** succeeds, or **Clear filters** commits an empty predicate list. Invalid drafts do not issue a new search. The current map/table represent the last applied state while drafts are clearly marked as unapplied.
+The **Add filter** picker searches available fields. Each selected field has a compact Golem-generated card: numbers and dates start with inclusive ranges when supported, text starts with equality, and **Condition** exposes the other advertised operators. Field titles, descriptions, enums and constraints come from metadata. Backend-supplied UI expressions or widget definitions are not executed, and no value suggestions or facet counts are inferred from a result page.
+
+By default, filters remain drafts until **Apply filters** validates and commits them. **Discard changes** restores the applied filters; **Clear filters** explicitly commits an empty predicate list while retaining the selected region. Invalid or incomplete drafts never issue a broader search. Applied filter chips summarize the current query and let users edit or remove a field. Map selection, sorting and pagination continue to operate on the applied predicates without erasing a draft.
+
+The map and table stay visible while a new search loads. A failed result request retains the previous table with a clear error and retry action. Empty results offer ways to remove filters or clear the region.
+
+Hosts that explicitly prefer automatic updates can set `filterMode = 'auto'` (or `filter-mode="auto"`) and optionally `filterDebounceMs` (or `filter-debounce-ms`). Valid edits then commit after that many milliseconds; manual mode is the default on both public elements. Drafts never emit `collectionstatechange` or change host URL state.
 
 The direct element's public state has this shape (use `setCollectionState()` on the wrapper):
 
@@ -75,7 +83,7 @@ explorer.setState(state); // Silent, complete state replacement; resets table pa
 
 All names, values, and sort entries must satisfy current metadata. Supported declared value constraints include enums/constants, numeric bounds and `multipleOf`, string length/pattern, and valid calendar dates. The compiler combines predicates with CQL2 `and`; date comparisons use canonical `{ "date": "YYYY-MM-DD" }` literals. `in` uses `[propertyReference, valueArray]`, and `isNull` has one property argument with no value. Inclusive form ranges compile to `>=` and/or `<=`. This is a bounded CQL2 subset, not an arbitrary expression editor.
 
-The compact form represents one condition or one inclusive range per field. State that cannot be represented is reported rather than discarded. Low-level `compileCollectionFilter`, `buildCollectionQuery`, `validateCollectionState`, and `createCollectionDataSource` are available from `@samplesift/components/data`.
+The compact form edits one condition or one inclusive range per field. Valid saved combinations outside that editor remain visible as read-only cards and continue to filter the query; removing one stages its removal without discarding other fields. Low-level `compileCollectionFilter`, `buildCollectionQuery`, `validateCollectionState`, and `createCollectionDataSource` are available from `@samplesift/components/data`.
 
 ## Spatial capabilities
 
@@ -169,7 +177,7 @@ Public integration events bubble across Shadow DOM:
 | `featureclick` | `{ id, properties, geometry }` for a singleton or selected table record. |
 | `searcherror` | `{ message }` for discovery/search failures. |
 
-`setState()` is silent; `refresh()` repeats the current page request. `metadata` returns a snapshot for host validation. While location tiles are fetching or being decoded, the map shows an accessible loading indicator. Network, HTTP, decoding failures, and requests exceeding 60 seconds show a map-specific error with **Retry map tiles**. Retrying reloads the current filtered tile source while preserving the viewport, region, and table page. Tile dispatch waits 150 ms so requests for intermediate zoom levels can be cancelled before reaching the backend. While finer tiles load, MapLibre may retain coarser tiles and the status explains that counts can reflect the previous view. Superseded requests are cancelled silently; failures from one tile are not hidden by another tile succeeding. The map-only element also exposes `retryTiles()`.
+`setState()` is silent and discards local drafts, including when the applied state is unchanged; changed states reset pagination. Host Back/Forward handlers should always call it so a pending edit cannot overwrite restored state. `refresh()` repeats the current page request. `metadata` returns a snapshot for host validation. While location tiles are fetching or being decoded, the map shows an accessible loading indicator. Network, HTTP, decoding failures, and requests exceeding 60 seconds show a map-specific error with **Retry map tiles**. Retrying reloads the current filtered tile source while preserving the viewport, region, and table page. Tile dispatch waits 150 ms so requests for intermediate zoom levels can be cancelled before reaching the backend. While finer tiles load, MapLibre may retain coarser tiles and the status explains that counts can reflect the previous view. Superseded requests are cancelled silently; failures from one tile are not hidden by another tile succeeding. The map-only element also exposes `retryTiles()`.
 
 ## Development proxy and limits
 

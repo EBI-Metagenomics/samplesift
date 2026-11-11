@@ -119,6 +119,16 @@ export function createCollectionFilterDefinition(fields: readonly QueryableField
   return { ...formDefinition, states: { ...formDefinition.states, ...states } };
 }
 
+/** Golem omits hidden controls from event data; preserve only the selected condition. */
+export function retainHiddenOperator(data: unknown, previous: FilterFormData): FilterFormData {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('Filter form values are unavailable.');
+  const next = structuredClone(data) as FilterFormData;
+  const row = next.f0;
+  if (row !== undefined && (!row || typeof row !== 'object' || Array.isArray(row))) throw new Error('Invalid filter values.');
+  if (row?.operator === undefined) next.f0 = { ...row, operator: previous.f0?.operator };
+  return next;
+}
+
 /** Blank controls are distinct from the explicit isNull predicate. */
 export function predicatesToFormData(predicates: readonly Predicate[], fields: readonly QueryableField[]): FilterFormData {
   const data: FilterFormData = {};

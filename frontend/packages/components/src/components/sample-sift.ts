@@ -49,7 +49,7 @@ export class SampleSift extends LitElement {
   collectionOptions?: CollectionOptions;
   collectionState: CollectionSearchState = createEmptyCollectionState();
   collectionPaused = false;
-  filterMode: 'auto' | 'manual' = 'auto';
+  filterMode: 'auto' | 'manual' = 'manual';
   filterDebounceMs = 500;
   private _collectionConfig?: CollectionOptions;
   demo = false;

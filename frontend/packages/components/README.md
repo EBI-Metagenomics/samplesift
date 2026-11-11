@@ -33,6 +33,8 @@ The target is the backend origin; the development proxy keeps browser API reques
 
 `api-url` is the API root including `/samplesift`. `collection` opts into collection mode; `tile-layer` explicitly names the source layer inside the MVT. Alternatively, assign `collectionOptions` as a JavaScript property. Advertised `s_intersects` geometry support enables rectangles and polygons; available scalar filters come from metadata rather than hardcoded domain fields.
 
+Filters use a searchable **Add filter** picker with compact field cards, inclusive numeric/date ranges and applied filter chips. Edits remain drafts until **Apply filters**; **Discard changes** restores the applied state. Hosts can opt into debounced updates with `filter-mode="auto"`.
+
 Use `collectionState`, silent `setCollectionState(state)`, `collectionMetadata`, and `collectionPaused` for host integration. Collection events and pure URL helpers are documented in [COLLECTION_API.md](COLLECTION_API.md). The host owns optional URL synchronization. The direct `<sample-sift-collection>` element exposes the same explorer without the legacy wrapper.
 
 ## Legacy mode: embed

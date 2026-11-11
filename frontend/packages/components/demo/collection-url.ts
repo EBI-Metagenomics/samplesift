@@ -13,7 +13,8 @@ function restore(explorer: SampleSift) {
   explorer.collectionPaused = true;
   try {
     const state = readCollectionQuery(new URL(location.href).searchParams, metadata, { namespace: explorer.id });
-    if (JSON.stringify(explorer.collectionState) !== JSON.stringify(state)) explorer.setCollectionState(state);
+    // Restore even an unchanged applied state to discard any local draft on Back/Forward.
+    explorer.setCollectionState(state);
     explorer.collectionPaused = false;
     errors.delete(explorer.id);
   } catch (error) {

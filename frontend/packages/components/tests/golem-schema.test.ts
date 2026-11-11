@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { Predicate, QueryableField } from '../src/collection/types';
 import {
   createCollectionFilterDefinition, deriveCollectionFilterSchema,
-  formDataToPredicates, predicatesToFormData,
+  formDataToPredicates, predicatesToFormData, defaultFilterOperator,
+  predicateStateKey, retainHiddenOperator,
 } from '../src/components/collection-filter-schema';
 
 const fields: QueryableField[] = [
@@ -104,4 +105,57 @@ describe('backend-driven Golem filter form', () => {
     const integer: QueryableField[] = [{ name: 'count', kind: 'integer', operators: ['='], nullable: false }];
     expect(() => formDataToPredicates({ f0: { operator: '=', value: 1.5 } }, integer)).toThrow('whole number');
   });
+
+  it('preserves the hidden operator while respecting cleared bounds and changed conditions', () => {
+    const previous = { f0: { operator: 'range', minimum: 50, maximum: 100 } };
+    const clearedLower = retainHiddenOperator({ f0: { maximum: 100 } }, previous);
+    expect(clearedLower).toEqual({ f0: { operator: 'range', maximum: 100 } });
+    expect(formDataToPredicates(clearedLower, [fields[0]])).toEqual([
+      { field: 'depth', operator: '<=', value: 100 },
+    ]);
+    expect(() => formDataToPredicates(retainHiddenOperator({}, previous), [fields[0]])).toThrow('range bound');
+    expect(retainHiddenOperator({ f0: { operator: '=', value: 12 } }, previous)).toEqual({ f0: { operator: '=', value: 12 } });
+    expect(previous.f0.minimum).toBe(50);
+  });
+
+  it('starts compact numeric and date cards with ranges and makes condition choice progressive', () => {
+    expect(defaultFilterOperator(fields[0])).toBe('range');
+    expect(defaultFilterOperator(fields[1])).toBe('range');
+    expect(defaultFilterOperator(fields[2])).toBe('=');
+    const definition = createCollectionFilterDefinition([fields[0]], 'instance-one-card-one');
+    expect(definition.states?.advanced).toBe('$meta.advanced === true');
+    expect(JSON.stringify(definition)).not.toContain('Any value');
+    expect(JSON.stringify(definition)).not.toContain('"actionType":"submit"');
+    expect(JSON.stringify(definition)).toContain('instance-one-card-one-f0-minimum');
+    expect(JSON.stringify(createCollectionFilterDefinition([fields[0]], 'instance-two-card-one')))
+      .not.toContain('instance-one-card-one');
+  });
+
+  it('carries advertised value constraints into the schema and blocks invalid typed values', () => {
+    const constrained: QueryableField = {
+      name: 'measurement', kind: 'number', operators: ['=', '>=', '<='], nullable: false,
+      schema: { minimum: 0, maximum: 100, multipleOf: 5 },
+    };
+    const schema = deriveCollectionFilterSchema([constrained], true);
+    expect((schema.properties as Record<string, { properties: { minimum: unknown } }>).f0.properties.minimum)
+      .toMatchObject({ minimum: 0, maximum: 100, multipleOf: 5, title: 'Minimum' });
+    expect(() => createCollectionFilterDefinition([constrained], 'constrained')).not.toThrow();
+    for (const value of [-5, 101, 12]) {
+      expect(() => formDataToPredicates({ f0: { operator: '=', value } }, [constrained])).toThrow();
+    }
+    expect(formDataToPredicates({ f0: { operator: '=', value: 15 } }, [constrained]))
+      .toEqual([{ field: 'measurement', operator: '=', value: 15 }]);
+    const enumerated = { ...constrained, schema: { enum: [0, 5, 10, null] } };
+    expect(defaultFilterOperator(enumerated)).toBe('=');
+    expect((deriveCollectionFilterSchema([enumerated], true).properties as Record<string, { properties: { value: unknown } }>).f0.properties.value)
+      .toMatchObject({ enum: [0, 5, 10] });
+  });
+
+  it('treats predicate and membership ordering as the same applied state', () => {
+    const first: Predicate[] = [{ field: 'depth', operator: '>=', value: 50 }, { field: 'name', operator: 'in', value: ['A', 'B'] }];
+    const reordered: Predicate[] = [{ field: 'name', operator: 'in', value: ['B', 'A', 'A'] }, { field: 'depth', operator: '>=', value: 50 }];
+    expect(predicateStateKey(first)).toBe(predicateStateKey(reordered));
+    expect(predicateStateKey(first)).not.toBe(predicateStateKey([{ field: 'depth', operator: '>=', value: 51 }]));
+  });
+
 });
