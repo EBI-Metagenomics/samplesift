@@ -7,6 +7,17 @@ An npm workspace for embeddable Lit components, with versions and release cycles
 Use Node.js 22.12 or newer (CI uses Node.js 24). From the repository root:
 
 ```sh
+task frontend:setup
+task dev
+```
+
+See [development tasks](../docs/frontend-development.md) for checks, browser tests, and command arguments.
+`task dev` starts the local OBIS backend and Vite together.
+It requires Docker Compose 2.24.4 or newer.
+Use `task frontend:dev` for Vite alone.
+Without Task:
+
+```sh
 cd frontend
 npm ci
 npm run dev

@@ -29,4 +29,4 @@ PY
 # Reconciling changed the collection version; prewarm empty-query tiles for it.
 python manage.py samplesift_sync_schema
 
-exec python manage.py runserver 0.0.0.0:8000 --noreload
+exec python manage.py runserver 0.0.0.0:8000 "$@"
