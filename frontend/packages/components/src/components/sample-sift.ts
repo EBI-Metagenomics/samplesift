@@ -23,6 +23,8 @@ export class SampleSift extends LitElement {
     collectionOptions: { attribute: false },
     collectionState: { attribute: false },
     collectionPaused: { type: Boolean, attribute: 'collection-paused' },
+    filterMode: { type: String, attribute: 'filter-mode' },
+    filterDebounceMs: { type: Number, attribute: 'filter-debounce-ms' },
     demo: { type: Boolean },
     pageSize: { type: Number, attribute: 'page-size' },
     dataSource: { attribute: false },
@@ -47,6 +49,8 @@ export class SampleSift extends LitElement {
   collectionOptions?: CollectionOptions;
   collectionState: CollectionSearchState = createEmptyCollectionState();
   collectionPaused = false;
+  filterMode: 'auto' | 'manual' = 'auto';
+  filterDebounceMs = 500;
   private _collectionConfig?: CollectionOptions;
   demo = false;
   pageSize = 10;
@@ -367,7 +371,7 @@ export class SampleSift extends LitElement {
 
   render() {
     if (this._collectionConfig) return html`<sample-sift-collection
-      .options=${this._collectionConfig} .state=${this.collectionState} .paused=${this.collectionPaused}
+      .options=${this._collectionConfig} .filterMode=${this.filterMode} .filterDebounceMs=${this.filterDebounceMs} .state=${this.collectionState} .paused=${this.collectionPaused}
       .mapStyle=${this.mapStyle} .pageSize=${this.pageSize}
       @collectionstatechange=${this.onCollectionState}></sample-sift-collection>`;
     const result = this._result;

@@ -237,6 +237,7 @@ export class SampleSiftMap extends LitElement {
         minZoom: 0.7,
         maxZoom: 18,
         bearing: 0,
+        fadeDuration: 0,
         pitch: 0,
         maxPitch: 0,
         dragRotate: false,
@@ -403,7 +404,7 @@ export class SampleSiftMap extends LitElement {
           filter: ['==', ['get', 'cluster'], true],
           layout: {
             'text-field': ['to-string', ['get', 'point_count']], 'text-font': ['sans-serif'],
-            'text-size': 11, 'text-allow-overlap': true,
+            'text-size': 11, 'text-allow-overlap': false,
           },
           paint: { 'text-color': '#ffffff' },
         });

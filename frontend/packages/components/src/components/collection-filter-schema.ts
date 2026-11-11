@@ -2,10 +2,12 @@ import { fromJsonSchema } from '@golemui/schemas/json-schema';
 import type { FormDefinitionJson, FormWidgetJson, JsonSchema } from '@golemui/schemas/json-schema';
 import { guiPreset } from '@golemui/gui-schemas/json-schema';
 import type { Operator, Predicate, QueryableField, Scalar } from '../collection/types';
+import { fieldLabel } from '../collection/presentation';
+import { validateFieldValue } from '../collection/schema';
 
 export type FilterFormData = Record<string, Record<string, unknown>>;
 const comparisons = new Set<string>(['=', '<>', '>', '>=', '<', '<=']);
-const labels: Record<string, string> = {
+export const filterOperatorLabels: Record<string, string> = {
   any: 'Any value', '=': 'Equals', '<>': 'Does not equal', in: 'One of', isNull: 'Is missing',
   '>': 'Greater than', '>=': 'At least', '<': 'Less than', '<=': 'At most', range: 'Inclusive range',
 };
@@ -14,52 +16,80 @@ function supportsRange(field: QueryableField) {
   return field.kind !== 'boolean' && field.operators.includes('>=') && field.operators.includes('<=');
 }
 
+const scalarConstraints = ['enum', 'const', 'minimum', 'maximum', 'exclusiveMinimum', 'exclusiveMaximum', 'multipleOf', 'minLength', 'maxLength', 'pattern'] as const;
+
 function valueSchema(field: QueryableField): JsonSchema {
-  return field.kind === 'date' ? { type: 'string', format: 'date', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'Use YYYY-MM-DD.' }
-    : field.kind === 'boolean' ? { type: 'boolean', default: false } : { type: field.kind };
+  const schema: JsonSchema = field.kind === 'date'
+    ? { type: 'string', format: 'date', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'Use YYYY-MM-DD.' }
+    : field.kind === 'boolean' ? { type: 'boolean', enum: [true, false] } : { type: field.kind };
+  for (const key of scalarConstraints) {
+    const value = field.schema?.[key];
+    if (value === undefined || (key === 'const' && value === null)) continue;
+    schema[key] = key === 'enum' && Array.isArray(value) ? value.filter(item => item !== null) : structuredClone(value);
+  }
+  return schema;
+}
+
+export function defaultFilterOperator(field: QueryableField): Operator | 'range' {
+  if (['number', 'integer', 'date'].includes(field.kind) && supportsRange(field)
+    && !field.schema?.enum && field.schema?.const === undefined) return 'range';
+  if (field.operators.includes('=')) return '=';
+  const operator = field.operators[0];
+  if (!operator) throw new Error(`${fieldLabel(field)} has no supported conditions.`);
+  return operator;
+}
+
+/** Equality is semantic: order changes in AND predicates or membership lists are not new searches. */
+export function predicateStateKey(predicates: readonly Predicate[]): string {
+  return JSON.stringify(predicates.map(predicate => {
+    if (predicate.operator === 'isNull') return JSON.stringify({ field: predicate.field, operator: predicate.operator });
+    const value = predicate.operator === 'in' ? [...new Set(predicate.value.map(item => JSON.stringify(item)))].sort() : predicate.value;
+    return JSON.stringify({ field: predicate.field, operator: predicate.operator, value });
+  }).sort());
 }
 
 /** Derive a fresh schema: backend widget hints and expression strings are never executed. */
-export function deriveCollectionFilterSchema(fields: readonly QueryableField[]): JsonSchema {
+export function deriveCollectionFilterSchema(fields: readonly QueryableField[], compact = false): JsonSchema {
   const properties: Record<string, JsonSchema> = {};
   const names = new Set<string>();
   fields.forEach((field, index) => {
     if (!field.name || names.has(field.name)) throw new Error('Filter fields must have distinct names.');
     names.add(field.name);
-    const title = field.title || field.name;
-    const operators = ['any', ...field.operators, ...(supportsRange(field) ? ['range'] : [])];
+    const title = fieldLabel(field);
+    const operators = [...(compact ? [] : ['any']), ...field.operators, ...(supportsRange(field) ? ['range'] : [])];
     if (field.operators.some((operator) => !comparisons.has(operator) && operator !== 'in' && operator !== 'isNull')) {
       throw new Error(`Unsupported operator advertised for ${title}.`);
     }
     properties[`f${index}`] = {
       type: 'object', additionalProperties: false,
       properties: {
-        operator: { type: 'string', title: `${title}: condition`, description: field.description, enum: operators, default: 'any' },
-        value: { ...valueSchema(field), title: `${title}: value` },
+        operator: { type: 'string', title: compact ? 'Condition' : `${title}: condition`, description: field.description, enum: operators, default: compact ? defaultFilterOperator(field) : 'any' },
+        value: { ...valueSchema(field), title: compact ? 'Value' : `${title}: value` },
         values: {
-          type: 'array', title: `${title}: values`, items: { type: 'string' },
+          type: 'array', title: compact ? 'Values' : `${title}: values`, items: { type: 'string' },
           description: field.kind === 'boolean' ? 'Enter true or false; press Enter after each value.'
             : field.kind === 'date' ? 'Use YYYY-MM-DD; press Enter after each date.'
               : 'Press Enter after each value.',
         },
-        minimum: { ...valueSchema(field), title: `${title}: minimum` },
-        maximum: { ...valueSchema(field), title: `${title}: maximum` },
+        minimum: { ...valueSchema(field), title: compact ? (field.kind === 'date' ? 'From' : 'Minimum') : `${title}: minimum` },
+        maximum: { ...valueSchema(field), title: compact ? (field.kind === 'date' ? 'To' : 'Maximum') : `${title}: maximum` },
       },
     };
   });
   return { type: 'object', properties, additionalProperties: false };
 }
 
-export function createCollectionFilterDefinition(fields: readonly QueryableField[]): FormDefinitionJson {
-  const { formDefinition, diagnostics } = fromJsonSchema(deriveCollectionFilterSchema(fields), {
-    preset: guiPreset({ submitLabel: 'Apply filters', enumThresholds: { select: 12 } }), vendorKeyword: false,
+export function createCollectionFilterDefinition(fields: readonly QueryableField[], cardId?: string): FormDefinitionJson {
+  const compact = cardId !== undefined;
+  const { formDefinition, diagnostics } = fromJsonSchema(deriveCollectionFilterSchema(fields, compact), {
+    preset: guiPreset({ submitLabel: 'Apply filters', submitAction: !compact, enumThresholds: { select: 12 } }), vendorKeyword: false,
     // The preset date widget clamps years below 1900 and defers draft commits on blur.
     // An ISO input preserves the full date contract; calendar validity is checked below.
     rules: [{ match: { format: 'date' }, widget: 'textinput', props: { placeholder: 'YYYY-MM-DD' } }],
   });
   const failures = diagnostics.filter((diagnostic) => diagnostic.severity !== 'info');
   if (failures.length) throw new Error(`Filter form could not be generated: ${failures.map((item) => item.message).join(' ')}`);
-  const states: Record<string, string> = {};
+  const states: Record<string, string> = compact ? { advanced: '$meta.advanced === true' } : {};
   fields.forEach((field, index) => {
     const key = `f${index}`;
     states[`${key}Scalar`] = [...comparisons].filter((operator) => field.operators.includes(operator as Operator))
@@ -73,10 +103,12 @@ export function createCollectionFilterDefinition(fields: readonly QueryableField
       if (widget.kind !== 'input' || !widget.path) continue;
       const [key, part] = widget.path.split('.');
       widget.on = { change: 'filter-draft' };
+      if (cardId) widget.uid = `${cardId}-${widget.path.replaceAll('.', '-')}`;
       if (part === 'operator') {
         const field = fields[Number(key.slice(1))];
-        const operators = ['any', ...field.operators, ...(supportsRange(field) ? ['range'] : [])];
-        widget.props = { ...widget.props, options: operators.map((value) => ({ value, label: labels[value] })) };
+        const operators = [...(compact ? [] : ['any']), ...field.operators, ...(supportsRange(field) ? ['range'] : [])];
+        if (compact) widget.include = { in: ['advanced'] };
+        widget.props = { ...widget.props, options: operators.map((value) => ({ value, label: filterOperatorLabels[value] })) };
       } else {
         const state = part === 'values' ? 'List' : part === 'value' ? 'Scalar' : 'Range';
         widget.include = { in: [`${key}${state}`] };
@@ -119,7 +151,7 @@ export function predicatesToFormData(predicates: readonly Predicate[], fields: r
 function isBlank(value: unknown) { return value === undefined || value === null || value === ''; }
 
 function readScalar(value: unknown, field: QueryableField, list = false): Scalar {
-  const title = field.title || field.name;
+  const title = fieldLabel(field);
   if (isBlank(value)) throw new Error(`Enter a value for ${title}.`);
   if (field.kind === 'number' || field.kind === 'integer') {
     const number = list && typeof value === 'string' && /^[-+]?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?$/i.test(value.trim())
@@ -127,11 +159,12 @@ function readScalar(value: unknown, field: QueryableField, list = false): Scalar
     if (typeof number !== 'number' || !Number.isFinite(number) || (field.kind === 'integer' && !Number.isSafeInteger(number))) {
       throw new Error(`Enter ${field.kind === 'integer' ? 'a whole number' : 'a finite number'} for ${title}.`);
     }
+    validateFieldValue(field, number);
     return number;
   }
   if (field.kind === 'boolean') {
-    if (typeof value === 'boolean') return value;
-    if (list && (value === 'true' || value === 'false')) return value === 'true';
+    if (typeof value === 'boolean') { validateFieldValue(field, value); return value; }
+    if (list && (value === 'true' || value === 'false')) { const boolean = value === 'true'; validateFieldValue(field, boolean); return boolean; }
     throw new Error(`Enter true or false for ${title}.`);
   }
   if (typeof value !== 'string') throw new Error(`Enter text for ${title}.`);
@@ -141,6 +174,7 @@ function readScalar(value: unknown, field: QueryableField, list = false): Scalar
       throw new Error(`Enter a valid date (YYYY-MM-DD) for ${title}.`);
     }
   }
+  validateFieldValue(field, value);
   return value;
 }
 

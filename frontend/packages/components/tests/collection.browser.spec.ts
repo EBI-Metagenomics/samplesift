@@ -74,18 +74,45 @@ async function mockApi(page: Page, cap?: number) {
   });
   return { queries, tiles };
 }
-async function open(page: Page, cap?: number) {
+async function open(page: Page, cap?: number, mode: 'auto' | 'manual' = 'manual') {
   const calls = await mockApi(page, cap);
   await page.goto('/demo/collection.html?tab=results&tag=a&tag=b#/host');
   const first = page.locator('#first'), second = page.locator('#second');
   await expect(first.getByTestId('collection-count')).toHaveText('6 records');
   await expect(second.getByTestId('collection-count')).toHaveText('6 records');
-  await expect(first.getByRole('button', { name: 'Apply filters', exact: true })).toBeVisible();
+  if (mode === 'manual') await manualMode(first, second);
+  await expect(first.getByRole('button', { name: 'Add filter', exact: true })).toBeVisible();
   return { first, second, ...calls };
 }
+async function manualMode(...explorers: Locator[]) {
+  for (const explorer of explorers) {
+    await explorer.evaluate(async (element: SampleSift) => {
+      element.filterMode = 'manual';
+      await element.updateComplete;
+    });
+    await expect(explorer.getByRole('button', { name: 'Apply filters', exact: true })).toBeVisible();
+  }
+}
+const filterCard = (explorer: Locator, label: string) => explorer.getByRole('group', { name: `${label} filter`, exact: true });
+async function addFilter(explorer: Locator, label: string) {
+  const card = filterCard(explorer, label);
+  if (!(await card.count())) {
+    await explorer.getByRole('button', { name: 'Add filter', exact: true }).click();
+    await explorer.getByRole('button', { name: `Add ${label} filter`, exact: true }).click();
+  }
+  await expect(card).toBeVisible();
+  return card;
+}
+async function condition(explorer: Locator, label: string, value: string) {
+  const card = await addFilter(explorer, label);
+  const control = card.getByLabel('Condition', { exact: true });
+  if (!(await control.isVisible())) await card.getByRole('button', { name: `Change ${label} condition`, exact: true }).click();
+  await control.selectOption(value);
+  return card;
+}
 async function applyDepth(first: Locator, value: string) {
-  await first.getByLabel('depth: condition', { exact: true }).selectOption('>=');
-  await first.getByLabel('depth: value', { exact: true }).fill(value);
+  const card = await condition(first, 'Depth', '>=');
+  await card.getByLabel('Value', { exact: true }).fill(value);
   await first.getByRole('button', { name: 'Apply filters', exact: true }).click();
 }
 
@@ -112,36 +139,36 @@ test('generated filters and tiles share CQL2 while paging and routing remain ind
 
 test('new metadata fields appear automatically and invalid drafts never query', async ({ page }) => {
   const { first, queries } = await open(page);
-  await first.getByLabel('temperature: condition', { exact: true }).selectOption('>=');
-  await first.getByLabel('temperature: value', { exact: true }).fill('20');
+  const temperature = await condition(first, 'Temperature', '>=');
+  await temperature.getByLabel('Value', { exact: true }).fill('20');
   await first.getByRole('button', { name: 'Apply filters', exact: true }).click();
   await expect(first.getByTestId('collection-count')).toHaveText('4 records');
   expect(queries.at(-1)?.filter).toEqual({ op: '>=', args: [{ property: 'temperature' }, 20] });
   const calls = queries.length;
-  await first.getByLabel('depth: condition', { exact: true }).selectOption('range');
-  await first.getByLabel('depth: minimum', { exact: true }).fill('100');
-  await first.getByLabel('depth: maximum', { exact: true }).fill('50');
+  const depth = await condition(first, 'Depth', 'range');
+  await depth.getByLabel('Minimum', { exact: true }).fill('100');
+  await depth.getByLabel('Maximum', { exact: true }).fill('50');
   await first.getByRole('button', { name: 'Apply filters', exact: true }).click();
-  await expect(first.locator('sample-sift-collection-filter-form .error')).toContainText('must not exceed');
+  await expect(first.locator('sample-sift-collection-filter-form').getByRole('alert').filter({ hasText: 'must not exceed' })).toBeVisible();
   expect(queries.length).toBe(calls);
-  await expect(first.getByLabel('Next collection page')).toBeDisabled();
-  await first.getByLabel('depth: maximum', { exact: true }).fill('150');
+  await expect(first.getByLabel('Next collection page')).toBeEnabled();
+  await depth.getByLabel('Maximum', { exact: true }).fill('150');
   await first.getByRole('button', { name: 'Apply filters', exact: true }).click();
   await expect(first.getByTestId('collection-count')).toHaveText('2 records');
 });
 
 test('dates preserve pre-1900 values and reject invalid calendar dates', async ({ page }) => {
   const { first, queries } = await open(page);
-  await first.getByLabel('date: condition', { exact: true }).selectOption('>=');
-  await first.getByRole('textbox', { name: 'date: value', exact: true }).fill('1800-02-28');
+  const date = await condition(first, 'Date', '>=');
+  await date.getByRole('textbox', { name: 'Value', exact: true }).fill('1800-02-28');
   await first.getByRole('button', { name: 'Apply filters', exact: true }).click();
   await expect.poll(() => queries.at(-1)?.filter).toEqual({ op: '>=', args: [{ property: 'date' }, { date: '1800-02-28' }] });
   const calls = queries.length;
-  await first.getByRole('textbox', { name: 'date: value', exact: true }).fill('2025-02-29');
+  await date.getByRole('textbox', { name: 'Value', exact: true }).fill('2025-02-29');
   await first.getByRole('button', { name: 'Apply filters', exact: true }).click();
-  await expect(first.locator('sample-sift-collection-filter-form .error')).toContainText('valid date');
+  await expect(first.locator('sample-sift-collection-filter-form').getByRole('alert').filter({ hasText: 'valid date' })).toBeVisible();
   expect(queries.length).toBe(calls);
-  await first.getByRole('textbox', { name: 'date: value', exact: true }).fill('2024-02-29');
+  await date.getByRole('textbox', { name: 'Value', exact: true }).fill('2024-02-29');
   await first.getByRole('button', { name: 'Apply filters', exact: true }).click();
   await expect(first.getByTestId('collection-count')).toHaveText('1 records');
 });
@@ -159,7 +186,7 @@ test('polygon and filters restore atomically and silently using advertised geome
   expect(queries.at(-1)?.filter?.op).toBe('and');
   expect(queries.at(-1)?.filter?.args).toContainEqual({ op: 's_intersects', args: [{ property: 'geometry' }, selection] });
   expect(queries.at(-1)?.filter?.args).toContainEqual({ op: '>=', args: [{ property: 'depth' }, 100] });
-  await expect(first.getByLabel('depth: value', { exact: true })).toHaveValue('100');
+  await expect(filterCard(first, 'Depth').getByLabel('Value', { exact: true })).toHaveValue('100');
   expect(await page.evaluate(() => (window as unknown as { collectionEvents: unknown[] }).collectionEvents)).toEqual([]);
 });
 
@@ -179,6 +206,7 @@ test('host URL adapter preserves foreign state and restores two instances on Bac
   const left = page.locator('#left'), right = page.locator('#right');
   await expect(left.getByTestId('collection-count')).toHaveText('6 records');
   await expect(right.getByTestId('collection-count')).toHaveText('6 records');
+  await manualMode(left, right);
   await page.evaluate(() => history.replaceState({ host: 'keep' }, ''));
   await applyDepth(left, '50');
   await expect(left.getByTestId('collection-count')).toHaveText('5 records');
@@ -307,7 +335,7 @@ test('delayed tile errors retry without changing the camera, region, filters or 
       selection: structuredClone(element.selection), body: structuredClone(element.tileSource.body),
     }))).toEqual(before);
     expect(queries).toHaveLength(tableCalls);
-    await expect(first.getByLabel('depth: value', { exact: true })).toHaveValue('50');
+    await expect(filterCard(first, 'Depth').getByLabel('Value', { exact: true })).toHaveValue('50');
     await expect(first.getByLabel('Sort records')).toHaveValue('-depth');
     await expect(first.getByTestId('collection-count')).toHaveText('3 records');
     await expect(second.getByTestId('tile-error')).toHaveCount(0);
@@ -403,4 +431,140 @@ test('superseded tile failures cannot affect new filters or another pending inst
     await expect(second.getByTestId('collection-count')).toHaveText('3 records');
     expect(queries).toHaveLength(tableCalls);
   } finally { old.resolve(); other.resolve(); }
+});
+
+test('default auto filtering debounces typing once and preserves text focus and caret after acknowledgement', async ({ page }) => {
+  const { first, second, queries } = await open(page, undefined, 'auto');
+  await expect(first.getByRole('button', { name: 'Apply filters', exact: true })).toHaveCount(0);
+  const before = queries.length;
+  const name = await condition(first, 'Name', '=');
+  const input = name.getByRole('textbox', { name: 'Value', exact: true });
+  await input.fill('R');
+  await input.fill('Record');
+  await input.fill('Record 1');
+  await input.evaluate((element: HTMLInputElement) => element.setSelectionRange(3, 3));
+  expect(queries).toHaveLength(before);
+  await expect(first.getByTestId('collection-count')).toContainText('1 record');
+  expect(queries).toHaveLength(before + 1);
+  expect(queries.at(-1)?.filter).toEqual({ op: '=', args: [{ property: 'name' }, 'Record 1'] });
+  await expect(input).toBeFocused();
+  expect(await input.evaluate((element: HTMLInputElement) => [element.selectionStart, element.selectionEnd])).toEqual([3, 3]);
+  await expect(second.getByTestId('collection-count')).toHaveText('6 records');
+  expect(await page.evaluate(() => (window as unknown as { collectionEvents: unknown[] }).collectionEvents.length)).toBe(1);
+});
+
+test('auto filtering keeps applied results usable while invalid ranges, dates and native numeric drafts stay local', async ({ page }) => {
+  const { first, queries } = await open(page, undefined, 'auto');
+  const locationBefore = page.url();
+  const before = queries.length;
+  const depth = await addFilter(first, 'Depth');
+  await depth.getByLabel('Minimum', { exact: true }).fill('100');
+  await depth.getByLabel('Maximum', { exact: true }).fill('50');
+  await page.waitForTimeout(650); // Longer than the public default debounce.
+  expect(queries).toHaveLength(before);
+  await expect(first.getByTestId('collection-count')).toHaveText('6 records');
+  await expect(first.locator('tbody tr')).toHaveCount(2);
+  await expect(first.getByRole('button', { name: 'Rectangle', exact: true })).toBeEnabled();
+  await expect(first.getByLabel('Next collection page')).toBeEnabled();
+  await depth.getByLabel('Maximum', { exact: true }).fill('150');
+  await expect(first.getByTestId('collection-count')).toHaveText('2 records');
+
+  const date = await condition(first, 'Date', '>=');
+  const dateInput = date.getByRole('textbox', { name: 'Value', exact: true });
+  const validRangeCalls = queries.length;
+  await dateInput.fill('2025-02-29');
+  await page.waitForTimeout(650);
+  expect(queries).toHaveLength(validRangeCalls);
+  await expect(first.getByTestId('collection-count')).toHaveText('2 records');
+  await dateInput.fill('2020-01-01');
+  await expect.poll(() => queries.length).toBe(validRangeCalls + 1);
+
+  const numeric = depth.getByLabel('Minimum', { exact: true });
+  const beforeBadInput = queries.length;
+  await numeric.fill('');
+  await numeric.press('e');
+  expect(await numeric.evaluate((element: HTMLInputElement) => element.validity.badInput)).toBe(true);
+  await page.waitForTimeout(650);
+  expect(queries).toHaveLength(beforeBadInput);
+  await expect(first.locator('tbody tr')).toHaveCount(2);
+  expect(page.url()).toBe(locationBefore);
+  await first.getByRole('button', { name: 'Clear filters', exact: true }).click();
+  await expect(first.getByTestId('collection-count')).toHaveText('6 records');
+  expect(queries.at(-1)?.filter).toBeUndefined();
+});
+
+test('map and sort changes preserve a pending filter draft; individual removal and clear keep other search state', async ({ page }) => {
+  const { first, second, queries } = await open(page, undefined, 'auto');
+  await first.evaluate(async (element: SampleSift) => {
+    element.filterDebounceMs = 2_000;
+    await element.updateComplete;
+  });
+  const depth = await addFilter(first, 'Depth');
+  await depth.getByLabel('Minimum', { exact: true }).fill('100');
+  await depth.getByLabel('Maximum', { exact: true }).fill('200');
+  await first.getByLabel('Sort records').selectOption('-depth');
+  await expect.poll(() => queries.at(-1)?.sort).toEqual(['-depth']);
+  await expect(depth.getByLabel('Minimum', { exact: true })).toHaveValue('100');
+  const selection: Polygon = { type: 'Polygon', coordinates: [[[-1, -1], [3.5, -1], [3.5, 3.5], [-1, 3.5], [-1, -1]]] };
+  await first.locator('sample-sift-map').evaluate((element, selection) => {
+    element.dispatchEvent(new CustomEvent('selectionchange', { detail: { geometry: selection }, bubbles: true, composed: true }));
+  }, selection);
+  await expect(depth.getByLabel('Maximum', { exact: true })).toHaveValue('200');
+  await expect(first.getByTestId('collection-count')).toHaveText('2 records');
+  const applied = await first.evaluate((element: SampleSift) => element.collectionState);
+  expect(applied.predicates).toEqual([
+    { field: 'depth', operator: '>=', value: 100 },
+    { field: 'depth', operator: '<=', value: 200 },
+  ]);
+  expect(applied.sort).toEqual(['-depth']);
+  expect(applied.selection).toEqual(selection);
+
+  await first.evaluate((element: SampleSift) => { element.filterDebounceMs = 100; });
+  const name = await condition(first, 'Name', '=');
+  await name.getByRole('textbox', { name: 'Value', exact: true }).fill('Record 2');
+  await expect(first.getByTestId('collection-count')).toContainText('1 record');
+  await depth.getByRole('button', { name: 'Remove Depth filter', exact: true }).click();
+  await expect(depth).toHaveCount(0);
+  await expect.poll(() => first.evaluate((element: SampleSift) => element.collectionState.predicates)).toEqual([
+    { field: 'name', operator: '=', value: 'Record 2' },
+  ]);
+  await first.getByRole('button', { name: 'Clear filters', exact: true }).click();
+  await expect(first.getByTestId('collection-count')).toHaveText('4 records');
+  const cleared = await first.evaluate((element: SampleSift) => element.collectionState);
+  expect(cleared.predicates).toEqual([]);
+  expect(cleared.sort).toEqual(['-depth']);
+  expect(cleared.selection).toEqual(selection);
+  await expect(second.getByTestId('collection-count')).toHaveText('6 records');
+});
+
+test('Back cancels an uncommitted auto-filter timer even when that widget’s applied URL state is unchanged', async ({ page }) => {
+  await mockApi(page);
+  await page.goto('/demo/collection-url.html?tab=results&tag=a&tag=b#host');
+  const left = page.locator('#left'), right = page.locator('#right');
+  await expect(left.getByTestId('collection-count')).toHaveText('6 records');
+  await expect(right.getByTestId('collection-count')).toHaveText('6 records');
+  await page.evaluate(() => history.replaceState({ host: 'keep-auto' }, ''));
+  const leftDepth = await condition(left, 'Depth', '>=');
+  await leftDepth.getByLabel('Value', { exact: true }).fill('50');
+  await expect(left.getByTestId('collection-count')).toHaveText('5 records');
+  const rightName = await condition(right, 'Name', '=');
+  await rightName.getByRole('textbox', { name: 'Value', exact: true }).fill('Record 3');
+  await expect(right.getByTestId('collection-count')).toContainText('1 record');
+  await leftDepth.getByLabel('Value', { exact: true }).fill('100');
+  await page.goBack();
+  await expect(right.getByTestId('collection-count')).toHaveText('6 records');
+  await expect(leftDepth.getByLabel('Value', { exact: true })).toHaveValue('50');
+  await page.waitForTimeout(650);
+  await expect(left.getByTestId('collection-count')).toHaveText('5 records');
+  expect(await page.evaluate(() => (window as unknown as { collectionEvents: unknown[] }).collectionEvents.length)).toBe(2);
+  const url = new URL(page.url());
+  expect(url.searchParams.getAll('tag')).toEqual(['a', 'b']);
+  expect(url.searchParams.get('tab')).toBe('results');
+  expect(url.hash).toBe('#host');
+  expect(url.searchParams.has('sf.left.query')).toBe(true);
+  expect(url.searchParams.has('sf.right.query')).toBe(false);
+  expect(await page.evaluate(() => history.state)).toEqual({ host: 'keep-auto' });
+  await page.goForward();
+  await expect(right.getByTestId('collection-count')).toContainText('1 record');
+  expect(await page.evaluate(() => (window as unknown as { collectionEvents: unknown[] }).collectionEvents.length)).toBe(2);
 });
