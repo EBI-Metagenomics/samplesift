@@ -1,7 +1,8 @@
 const fs = require('node:fs'), vm = require('node:vm'), assert = require('node:assert');
 const calls = [];
 const path = '/samplesift/collections/fish/tiles/{z}/{x}/{y}';
-const schema = {openapi:'3.2.1',paths:{[path]:{query:{tags:['fish']}}}};
+const resultsPath = '/samplesift/collections/fish/results';
+const schema = {openapi:'3.2.1',paths:{[path]:{query:{tags:['fish']}},[resultsPath]:{query:{tags:['fish']}}}};
 const responseInner = {prepend(element) { this.element = element; element.isConnected = true; }};
 const label = {textContent:'POST'};
 const curl = {textContent:"curl -X 'POST' \\\n  'http://localhost/example'"};
@@ -22,15 +23,20 @@ const context = {URL, Response, Headers, ArrayBuffer, location:{href:'http://loc
     createElement:()=>({style:{},setAttribute(){}}),head:{appendChild(element){ if (element.src) script = element; }}},
   window:{maplibregl:{Map: MockMap,NavigationControl:class {}},fetch:async (url, init)=>{
     calls.push({url,init});
-    return String(url).endsWith('openapi.json') ? new Response(JSON.stringify(schema)) : new Response(new Uint8Array(calls.length === 2 ? [1,2,3] : []));
+    if (String(url).endsWith('openapi.json')) return new Response(JSON.stringify(schema));
+    if (String(url).endsWith('/results')) return new Response('{}', {headers:{'content-type':'application/json'}});
+    return new Response(new Uint8Array(calls.length === 3 ? [1,2,3] : []), {headers:{'content-type':'application/vnd.mapbox-vector-tile; charset=binary'}});
   }}};
 vm.runInNewContext(fs.readFileSync('src/samplesift/django/static/samplesift/tile-preview.js','utf8'), context);
 (async()=>{
   const schemaResponse = await context.window.fetch('http://localhost/samplesift/openapi.json');
   const s = await schemaResponse.json();
   assert(s.paths[path].post); assert(!s.paths[path].query);
-  const result = await context.window.fetch('http://localhost/samplesift/collections/fish/tiles/1/0/0',{method:'POST',body:'{}'});
+  await context.window.fetch('http://localhost/samplesift/collections/fish/results',{method:'POST',body:'{}'});
   assert.equal(calls[1].init.method,'QUERY');
+  observer(); assert(!responseInner.element, 'non-tile QUERY responses must not render a map');
+  const result = await context.window.fetch('http://localhost/samplesift/collections/fish/tiles/1/0/0',{method:'POST',body:'{}'});
+  assert.equal(calls[2].init.method,'QUERY');
   assert.deepEqual([...new Uint8Array(await result.arrayBuffer())],[1,2,3]);
   observer(); assert.equal(label.textContent,'QUERY'); assert(responseInner.element);
   assert(curl.textContent.includes("-X 'QUERY'"));
@@ -48,5 +54,5 @@ vm.runInNewContext(fs.readFileSync('src/samplesift/django/static/samplesift/tile
   assert.equal(ring.length, 5);
   assert.equal(ring[0][0], -180);
   assert.equal(ring[1][0], 0);
-  console.log('schema, QUERY response, map placement, zoom and tile outline passed');
+  console.log('schema, QUERY response, content-type detection, map placement, zoom and tile outline passed');
 })().catch(error=>{console.error(error); process.exit(1)});

@@ -263,6 +263,10 @@ response, using the same request and preserving its response. MapLibre is loaded
 from jsDelivr and the basemap from OpenStreetMap, so rendering requires access to
 those services. The map shows the returned tile with an orange boundary at one
 zoom level farther out; its features are decoded in the browser for display.
+The preview appears for any `QUERY` response with content type
+`application/vnd.mapbox-vector-tile`, taking the tile coordinates from the
+operation's `{z}`, `{x}` and `{y}` path parameters, so it does not depend on the
+URL shape.
 Swagger UI's internal schema is adapted to display `QUERY`
 operations; requests still use `QUERY` and the published OpenAPI schema remains
 unchanged. Generated curl commands and their copy button also use `QUERY`.

@@ -15,6 +15,16 @@
       /^\{[^}]+\}$/.test(part) || part === actual[i]);
   }
 
+  function tileCoordinates(template, pathname) {
+    const actual = pathname.split('/');
+    const coords = {};
+    template.split('/').forEach((part, i) => {
+      const name = /^\{([zxy])\}$/.exec(part)?.[1];
+      if (name) coords[name] = Number(actual[i]);
+    });
+    return ['z', 'x', 'y'].every(name => Number.isInteger(coords[name])) ? coords : null;
+  }
+
   function loadMapLibre() {
     if (!maplibrePromise) maplibrePromise = new Promise((resolve, reject) => {
       const css = document.createElement('link');
@@ -112,7 +122,7 @@
       const schema = await response.clone().json();
       for (const [path, item] of Object.entries(schema.paths || {})) {
         if (!item.query) continue;
-        operations.push({path, tile: path.endsWith('/tiles/{z}/{x}/{y}'), layer: item.query.tags?.[0]});
+        operations.push({path, layer: item.query.tags?.[0]});
         item.post = item.query;
         delete item.query;
       }
@@ -124,10 +134,11 @@
     const operation = url.origin === location.origin && method === 'POST' && operations.find(op => matches(op.path, url.pathname));
     if (!operation) return originalFetch(input, init);
     const response = await originalFetch(input, {...init, method: 'QUERY'});
-    if (operation.tile && response.ok) {
-      const coords = url.pathname.split('/').slice(-3).map(Number);
+    const mediaType = response.headers.get('content-type')?.split(';')[0].trim().toLowerCase();
+    const coords = tileCoordinates(operation.path, url.pathname);
+    if (response.ok && mediaType === 'application/vnd.mapbox-vector-tile' && coords) {
       const bytes = await response.clone().arrayBuffer();
-      latestPreview = {operation, z: coords[0], x: coords[1], y: coords[2], bytes};
+      latestPreview = {operation, ...coords, bytes};
       attachPreview();
     }
     return response;
