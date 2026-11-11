@@ -67,9 +67,42 @@ def test_openapi_describes_query_operations_and_registered_collection() -> None:
         body = schema["paths"][f"/samplesift/collections/api-samples/{suffix}"]["query"]["requestBody"]
         assert body["content"]["application/json"]["example"] == ApiSampleCollection.Query.query_example
     tile = schema["paths"]["/samplesift/collections/api-samples/tiles/{z}/{x}/{y}"]["query"]
+    assert tile["responses"]["200"]["content"]["application/vnd.mapbox-vector-tile"]["schema"] == {
+        "type": "string", "format": "binary"
+    }
     assert {param["name"]: param["example"] for param in tile["parameters"]} == {
         "z": 10, "x": 543, "y": 309
     }
+
+
+def test_docs_include_packaged_tile_preview(monkeypatch, settings) -> None:
+    from django.test import RequestFactory
+
+    from samplesift.django.api import SamplesiftDocs, tile_preview_script
+
+    settings.TEMPLATES = [{"BACKEND": "django.template.backends.django.DjangoTemplates"}]
+    monkeypatch.setattr("samplesift.django.api.reverse", lambda *args, **kwargs: "/prefix/_tile-preview.js")
+    monkeypatch.setattr(SamplesiftDocs, "get_openapi_url", lambda *args: "/prefix/openapi.json")
+    request = RequestFactory().get("/prefix/docs")
+    response = SamplesiftDocs().render_page(request, api)
+    assert b'data-schema-url="/prefix/openapi.json"' in response.content
+    assert b'src="/prefix/_tile-preview.js"' in response.content
+    assert response.content.index(b'src="/prefix/_tile-preview.js"') < response.content.index(b'id="swagger-ui"')
+    script = tile_preview_script(request)
+    assert script["Content-Type"] == "application/javascript"
+    assert b"method: 'QUERY'" in script.content
+
+
+def test_tile_preview_uses_the_existing_request_and_response() -> None:
+    import shutil
+    import subprocess
+    from pathlib import Path
+
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node.js is required for the browser script test")
+    root = Path(__file__).resolve().parent.parent
+    subprocess.run([node, str(root / "tests/tile_preview_check.cjs")], cwd=root, check=True)
 
 
 def test_queryable_alias_and_capabilities() -> None:
