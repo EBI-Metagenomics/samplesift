@@ -8,14 +8,18 @@ import json
 import math
 from datetime import date, datetime, time
 from decimal import Decimal
+from pathlib import Path
 from typing import Annotated, Any
 from uuid import UUID
 
 from django.db import connections, models
 from django.db.models import Q, QuerySet
 from django.http import HttpResponse
+from django.urls import reverse
+from django.utils.html import escape
 from ninja import Body, NinjaAPI
 from ninja.errors import HttpError
+from ninja.openapi.docs import Swagger
 
 from samplesift.query import Queryable
 
@@ -193,6 +197,18 @@ def _serialize_row(row: models.Model, collection: type[SampleSiftCollection]) ->
     return data
 
 
+class SamplesiftDocs(Swagger):
+    def render_page(self, request: Any, api: NinjaAPI, **kwargs: Any) -> HttpResponse:
+        response = super().render_page(request, api, **kwargs)
+        asset_url = reverse(f"{api.urls_namespace}:samplesift-tile-preview", kwargs=kwargs)
+        schema_url = self.get_openapi_url(api, kwargs)
+        markup = f'<script src="{escape(asset_url)}" data-schema-url="{escape(schema_url)}"></script>'
+        response.content = response.content.replace(
+            b'<div id="swagger-ui"', markup.encode() + b'<div id="swagger-ui"', 1
+        )
+        return response
+
+
 class SamplesiftAPI(NinjaAPI):
     """Ninja API with one static operation pair for every spatial collection."""
 
@@ -342,7 +358,16 @@ api = SamplesiftAPI(
     title="SampleSift collection API",
     version="1.0.0",
     description="Read-only spatial queries over registered SampleSift collections.",
+    docs=SamplesiftDocs(),
 )
+
+
+@api.get("/_tile-preview.js", include_in_schema=False, url_name="samplesift-tile-preview")
+def tile_preview_script(request: Any) -> HttpResponse:
+    script = Path(__file__).parent / "static" / "samplesift" / "tile-preview.js"
+    return HttpResponse(script.read_bytes(), content_type="application/javascript")
+
+
 registry.set_api_registration_callback(api.register_collection)
 for _collection in registry.api_collections:
     api.register_collection(_collection)
