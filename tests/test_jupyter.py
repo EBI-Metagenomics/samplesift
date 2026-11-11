@@ -54,7 +54,10 @@ def test_example_notebook_code() -> None:
                     compile("".join(cell["source"]), "jupyter.ipynb", "exec"), namespace
                 )
         assert isinstance(namespace["widget"], SampleSift)
-        assert namespace["widget"].demo is True
+        widget = namespace["widget"]
+        assert widget.demo is False
+        assert widget.api_url == "http://127.0.0.1:5173/samplesift"
+        assert widget.collection == widget.tile_layer == "occurrences"
     finally:
         if "widget" in namespace:
             namespace["widget"].close()

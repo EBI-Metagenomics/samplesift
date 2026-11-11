@@ -10,6 +10,8 @@ The wrapper embeds the existing `<sample-sift>` frontend component.
 It contains no separate map, data adapter, or query implementation.
 The frontend module comes from a running frontend server.
 No frontend bundle is included in the Python wheel yet.
+Jupyter does not download or bundle a separate OBIS dataset.
+The example queries the shared backend's existing OBIS fixture.
 
 ## Source checkout
 
@@ -20,10 +22,10 @@ task frontend:setup
 task jupyter:setup
 ```
 
-Start Vite in one terminal:
+Start the OBIS backend and Vite in one terminal:
 
 ```sh
-task frontend:dev
+task dev
 ```
 
 Start the example notebook in another terminal:
@@ -34,14 +36,24 @@ task jupyter:lab
 
 The server, kernel, and widget extensions share the project Python environment.
 Select that Python kernel in JupyterLab.
-The example uses the component's existing synthetic demo mode:
+The example uses the real OBIS collection through the Vite proxy:
 
 ```python
 from samplesift.jupyter import SampleSift
 
-widget = SampleSift(demo=True)
+widget = SampleSift(
+    api_url="http://127.0.0.1:5173/samplesift",
+    collection="occurrences",
+    tile_layer="occurrences",
+)
 widget
 ```
+
+Keep `task dev` running while using the notebook.
+
+Use the Vite port in `api_url`, not the backend port.
+Vite forwards API requests to the backend and allows local notebook `QUERY` preflights.
+Low zoom levels show backend clusters; higher zoom levels show individual records.
 
 Vite serves the real component and its worker assets.
 The default module URL is `http://127.0.0.1:5173/src/index.ts`.
@@ -69,10 +81,21 @@ widget
 
 The API URL is resolved by the browser, not Python.
 Jupyter and Vite have different origins.
-The API must allow the notebook origin and HTTP `QUERY` preflights.
-The existing Vite proxy does not automatically solve this notebook CORS requirement.
-Local OBIS collection integration needs further frontend or hosting work.
-This change does not modify the frontend's transport, filters, or events.
+Remote APIs must allow the notebook origin and HTTP `QUERY` preflights.
+The development Vite server allows localhost notebook origins.
+Its worker URLs resolve against Vite, independently of the notebook URL.
+
+## Jupyter extension-manager errors
+
+A traceback from `/lab/api/extensions` concerns JupyterLab's extension catalog, not map tiles.
+The installed JupyterLab PyPI manager can raise `UnboundLocalError` after a catalog request fails.
+Use its read-only manager to avoid catalog searches during development:
+
+```sh
+task jupyter:lab -- --LabApp.extension_manager=readonly
+```
+
+Installed widget extensions still load with that manager.
 
 ## Checks
 

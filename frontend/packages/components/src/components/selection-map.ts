@@ -36,8 +36,8 @@ const CLUSTER_LAYER = 'samplesift-collection-clusters';
 const CLUSTER_LABEL_LAYER = 'samplesift-collection-counts';
 let tileProtocolSequence = 0;
 
-// Vite emits this worker beside the distributable, so the plain HTML build also works.
-setWorkerUrl(mapLibreWorkerUrl);
+// Resolve against the component server when embedded on another origin, such as Jupyter.
+setWorkerUrl(new URL(mapLibreWorkerUrl, import.meta.url).href);
 
 /** Raster basemap for the demo. Consumers may supply their own MapLibre style. */
 export const defaultMapStyle: StyleSpecification = {

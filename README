@@ -148,8 +148,10 @@ SampleSift(demo=True)
 ```
 
 The wrapper uses the existing frontend component from a running Vite server.
-From a source checkout, use `task frontend:dev` and `task jupyter:lab` in separate terminals.
-Run `task jupyter:setup` for the notebook environment.
+From a source checkout, run `task frontend:setup` and `task jupyter:setup` once.
+Use `task dev` for the backend and frontend in one terminal.
+Use `task jupyter:lab` in another terminal.
+The example notebook uses the OBIS collection, backend clusters, and query filters.
 See [Jupyter setup and limits](docs/jupyter.md) and [the example notebook](examples/jupyter.ipynb).
 
 ## Repository layout
