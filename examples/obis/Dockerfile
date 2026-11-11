@@ -6,7 +6,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 COPY pyproject.toml README ./
 COPY src ./src
-RUN pip install --no-cache-dir '.[django]' 'psycopg[binary]>=3.2,<4'
+RUN pip install --no-cache-dir '.[django]' 'psycopg[binary]>=3.2,<4' 'redis>=5,<7'
 COPY examples/obis ./examples/obis
 WORKDIR /app/examples/obis
 EXPOSE 8000
