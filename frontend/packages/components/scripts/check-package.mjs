@@ -6,7 +6,7 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
 const required = [
   'package.json', 'README.md', 'LICENSE', 'COLLECTION_API.md', 'STYLING.md',
-  'dist/THIRD_PARTY_NOTICES.txt',
+  'dist/THIRD_PARTY_NOTICES.txt', 'dist/LICENSE', 'dist/build-info.json',
   'examples/styling/react/SampleExplorer.jsx', 'examples/styling/django/explorer.html',
   'examples/styling/samplesift-theme.css',
   'examples/styling/react-vf/README.md', 'examples/styling/react-vf/EbiSampleExplorer.jsx',
@@ -24,6 +24,10 @@ if (![...files].some(file => /^dist\/assets\/maplibre-gl-worker-.*\.js$/.test(fi
 }
 if ([...files].some(file => /(^|\/)(node_modules|\.env|\.git|test-results|playwright-report)(\/|$)/.test(file))) {
   throw new Error('The npm archive contains development/private files. Check the package files allowlist.');
+}
+const buildInfo = JSON.parse(await readFile(new URL('../dist/build-info.json', import.meta.url), 'utf8'));
+if (buildInfo.name !== pkg.name || buildInfo.version !== pkg.version) {
+  throw new Error('Built frontend metadata does not match package.json. Rebuild before packing.');
 }
 if (pkg.license !== 'Apache-2.0') throw new Error('Review the package license before publishing.');
 console.log(`${pkg.name}@${pkg.version}: ${archive.entryCount} files, ${(archive.size / 1024 / 1024).toFixed(2)} MB packed. Exports, docs, examples, licenses and worker are present.`);

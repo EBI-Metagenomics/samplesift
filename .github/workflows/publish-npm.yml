@@ -1,0 +1,124 @@
+name: Publish npm package
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate-release:
+    if: startsWith(github.event.release.tag_name, 'npm-v')
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      dist-tag: ${{ steps.release.outputs.dist_tag }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Check npm release tag and package versions
+        id: release
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
+        run: node frontend/packages/components/scripts/check-npm-release.mjs
+
+  test-frontend:
+    if: startsWith(github.event.release.tag_name, 'npm-v')
+    needs: validate-release
+    uses: ./.github/workflows/test-frontend.yml
+    with:
+      release_checks: true
+
+  build:
+    if: startsWith(github.event.release.tag_name, 'npm-v')
+    needs: [validate-release, test-frontend]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: npm ci --prefix frontend
+
+      # prepack builds the exports and checks the package file allowlist.
+      - name: Build the release archive and checksum
+        working-directory: frontend/packages/components
+        env:
+          RELEASE_VERSION: ${{ needs.validate-release.outputs.version }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/npm-release"
+          npm pack --pack-destination "$RUNNER_TEMP/npm-release"
+          cd "$RUNNER_TEMP/npm-release"
+          mv "samplesift-components-$RELEASE_VERSION.tgz" samplesift-components.tgz
+          sha256sum samplesift-components.tgz > SHA256SUMS
+
+      - name: Upload the checked archive
+        uses: actions/upload-artifact@v7
+        with:
+          name: npm-dist
+          path: ${{ runner.temp }}/npm-release/
+          if-no-files-found: error
+
+  # Publish the existing archive: no checkout, project dependencies or lifecycle scripts.
+  publish:
+    name: publish to npm
+    if: startsWith(github.event.release.tag_name, 'npm-v')
+    needs: [validate-release, build]
+    runs-on: ubuntu-24.04
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/@samplesift/components
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: Pin the OIDC-capable npm CLI
+        run: npm install --global npm@11.21.2 --ignore-scripts --registry=https://registry.npmjs.org
+
+      - name: Download the checked archive
+        uses: actions/download-artifact@v8
+        with:
+          name: npm-dist
+          path: npm-release/
+
+      - name: Verify the archive checksum
+        working-directory: npm-release
+        run: sha256sum --check SHA256SUMS
+
+      - name: Publish with Trusted Publishing
+        working-directory: npm-release
+        env:
+          NPM_DIST_TAG: ${{ needs.validate-release.outputs.dist-tag }}
+        run: >-
+          npm publish ./samplesift-components.tgz --ignore-scripts
+          --access public --registry=https://registry.npmjs.org --tag "$NPM_DIST_TAG"

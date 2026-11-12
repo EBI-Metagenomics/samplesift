@@ -1,9 +1,13 @@
-import { readFile, readdir, writeFile } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
+import { access, copyFile, readFile, readdir, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
-const dist = join(root, 'dist');
+const dist = resolve(root, process.argv[2] ?? 'dist');
+const require = createRequire(join(root, 'package.json'));
+const component = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
 const files = await readdir(dist, { recursive: true });
 const packages = new Set();
 
@@ -18,10 +22,18 @@ for (const file of files.filter(name => name.endsWith('.js.map'))) {
     if (index === -1) continue;
     const base = path.slice(0, index + marker.length);
     const segments = path.slice(index + marker.length).split(sep);
-    packages.add(join(base, ...segments.slice(0, segments[0].startsWith('@') ? 2 : 1)));
+    const name = segments.slice(0, segments[0].startsWith('@') ? 2 : 1).join('/');
+    let directory = join(base, name);
+    try {
+      await access(join(directory, 'package.json'));
+    } catch {
+      // Vite's copied worker map retains paths relative to the default output.
+      directory = dirname(require.resolve(`${name}/package.json`));
+    }
+    packages.add(directory);
   }
 }
-if (!packages.size) throw new Error('No bundled packages found. Build with source maps before preparing the npm archive.');
+if (!packages.size) throw new Error('No bundled packages found. Build with source maps before preparing the distributable assets.');
 
 const entries = [];
 for (const directory of packages) {
@@ -41,7 +53,24 @@ for (const directory of packages) {
 }
 entries.sort((left, right) => left.name.localeCompare(right.name));
 await writeFile(join(dist, 'THIRD_PARTY_NOTICES.txt'), [
-  'SampleSift includes the following third-party software. These notices apply to\nthose dependencies; SampleSift itself is licensed under Apache-2.0.\n',
+  'SampleSift includes the following third-party software. These notices apply to\nthose dependencies; the SampleSift frontend component is licensed under Apache-2.0.\n',
   ...entries.map(entry => `\n${'='.repeat(72)}\n${entry.text}`),
 ].join('\n'));
 console.log(`Preserved license notices for ${entries.length} bundled packages.`);
+
+await copyFile(join(root, 'LICENSE'), join(dist, 'LICENSE'));
+let sourceRevision = null;
+let sourceDirty = null;
+try {
+  sourceRevision = execFileSync('git', ['rev-parse', 'HEAD'], {
+    cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
+  }).trim();
+  sourceDirty = execFileSync('git', ['status', '--porcelain', '--untracked-files=normal'], {
+    cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
+  }).trim().length > 0;
+} catch {
+  // A source distribution may have no Git checkout; the package version is still known.
+}
+await writeFile(join(dist, 'build-info.json'), `${JSON.stringify({
+  name: component.name, version: component.version, sourceRevision, sourceDirty,
+}, null, 2)}\n`);

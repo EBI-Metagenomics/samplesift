@@ -62,6 +62,21 @@ The component requests:
 
 `QUERY` is the backend's read-only HTTP method; these endpoints are not substituted with POST or GET. Requests with bodies use `Content-Type: application/json`.
 
+## API compatibility
+
+Compatibility depends on this collection contract, not on matching npm and Python package version numbers. The reference backend currently declares OpenAPI `info.version` as `1.0.0`; the component discovers capabilities from the schemas and does not negotiate an API version.
+
+| Capability | Required behavior |
+| --- | --- |
+| Discovery | Queryables describe an object with properties; supported field operators are listed in `x-samplesift.operators`. OpenAPI contains exactly one `QUERY` results operation for the configured collection. |
+| Request schema | JSON requests expose `filter`, an explicit string enum of sort values, an integer `limit` with a positive default and maximum, and a nonnegative integer `offset`. Schema references must be local and acyclic. |
+| Results | The response schema describes an `items` array and its columns. Each item has a nonempty string `source_pk` and a GeoJSON Point or `null` geometry. `total` is optional. |
+| Selection | One object queryable advertises `s_intersects` for polygon selection, or the host explicitly configures the numeric-coordinate rectangle fallback described below. |
+| Tiles, when configured | The endpoint accepts the same CQL2 filter and returns MVT Point features in the configured source layer, with `cluster` and `point_count`; singletons expose `source_pk`. |
+| Hosting | The server and any proxy accept the `QUERY` method with JSON bodies. Use a same-origin API or CORS configured for that method and its request headers. |
+
+Use the supported CQL2 subset below when implementing another provider. A generic GeoJSON endpoint, a differently shaped search API, or matching version labels alone do not satisfy this contract. The npm package supplies the browser component; it does not install or start the Python API. Collection options currently do not provide custom authentication headers or a configurable fetch implementation.
+
 ## Queryables, Golem, and CQL2
 
 The metadata parser reads primitive number, integer, string, date, and boolean fields. Operators come from each field's `x-samplesift.operators` capability list. The supported scalar subset is `=`, `<>`, `in`, `isNull`, `>`, `>=`, `<`, and `<=`. Unknown operators or unsupported schema constraints produce diagnostics and unavailable controls; they are not silently converted into weaker filters.
@@ -112,7 +127,11 @@ A result request includes the compiled `filter`, optional advertised `sort`, and
 
 The inspected tile schema uses Point features with `cluster`, `point_count`, and `cluster_id`. Singleton records also expose `source_pk` and their attributes. MVT features have no intrinsic numeric feature ID, so singleton identification and highlighting use `source_pk`.
 
-The separate local backend uses a world-aligned grid for display aggregation: cells halve in width and height at each zoom. Queries include complete cells across tile boundaries, and each centroid belongs to one tile. This replaces the earlier global DBSCAN calculation, whose chains of nearby points could keep the whole collection together and delay tile updates. The frontend requests higher-zoom tiles as the camera zooms; it does not compute or subdivide backend clusters. The example switches to individual records above zoom 14. Other backends may implement different clustering semantics.
+The reference PostGIS backend uses proximity clustering with DBSCAN, with a minimum of one point. By default, it clusters through zoom 14 using a 40-pixel distance measured against MapLibre's 512-pixel vector tiles; at zoom 15 and above it returns individual records. The backend settings `SAMPLESIFT_CLUSTER_RADIUS_PIXELS` and `SAMPLESIFT_CLUSTER_MAX_ZOOM` configure these defaults. Clustering considers the entire filtered collection before producing each tile, so adjacent tiles agree on membership. Connected chains of nearby points can keep a large cluster together even when its outermost points are farther apart than the configured distance.
+
+The frontend requests higher-zoom tiles as the camera zooms; it does not compute or subdivide backend clusters. The distance in Web Mercator metres halves with each integer zoom, but a cluster only splits when its points no longer form connected chains. Coincident points can remain grouped until clustering is disabled. Clustering the full filtered collection can be expensive; these defaults are not a demonstrated performance guarantee for large datasets. Other compatible backends may implement different clustering semantics.
+
+The 512-pixel calculation requires the backend radius correction from commit `552cdf5` or an equivalent patch. The correction is included in repository `main` at `375aeee`; it is not present in pristine `37b81f3`. Older 256-pixel calculations use twice the intended geographic distance at a given MapLibre zoom.
 
 Clusters render as larger circles with count labels; clicking one zooms toward it without pretending it is an individual record. Clicking a singleton emits `featureclick` directly from its tile properties, even when that record is not on the current table page. The pinned MapLibre version can render the count labels using local `sans-serif` glyphs when the style has no glyphs URL; the default raster/background-only styles need no remote font endpoint.
 
