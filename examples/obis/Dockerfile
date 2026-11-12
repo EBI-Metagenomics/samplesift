@@ -18,3 +18,4 @@ COPY examples/obis ./examples/obis
 WORKDIR /app/examples/obis
 EXPOSE 8000
 ENTRYPOINT ["./entrypoint.sh"]
+CMD ["--noreload"]

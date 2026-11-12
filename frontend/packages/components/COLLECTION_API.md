@@ -68,6 +68,9 @@ The map and table stay visible while a new search loads. A failed result request
 
 Hosts that explicitly prefer automatic updates can set `filterMode = 'auto'` (or `filter-mode="auto"`) and optionally `filterDebounceMs` (or `filter-debounce-ms`). Valid edits then commit after that many milliseconds; manual mode is the default on both public elements. Drafts never emit `collectionstatechange` or change host URL state.
 
+Applied-filter chips can focus their condition control, remove that field, or clear all scalar filters.
+These actions preserve the selected map region.
+
 The direct element's public state has this shape (use `setCollectionState()` on the wrapper):
 
 ```js
@@ -181,6 +184,7 @@ Public integration events bubble across Shadow DOM:
 | `collectionready` | `{ metadata }` after capability loading. |
 | `collectionstatechange` | `{ state }` for valid user commits, region changes, and sorting. |
 | `collectionresultschange` | `{ state, query, result }` for a successful current page request. |
+| `collectiontileschange` | `{ loading, pending, error, revision, ready, query }` for map tile status changes; no tile bytes or result rows. |
 | `selectionchange` | `{ geometry }` for user region actions. |
 | `featureclick` | `{ id, properties, geometry }` for a singleton or selected table record. |
 | `searcherror` | `{ message }` for discovery/search failures. |

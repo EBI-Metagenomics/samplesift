@@ -1,5 +1,11 @@
 # OBIS Django example
 
+From the repository root, `task backend:dev` starts the local development backend.
+`task dev` starts the backend and frontend together.
+These tasks use `compose.dev.yml`, Django reloads, and loopback port 8002.
+The development database uses a separate `samplesift-ui-dev` Compose project.
+See [development tasks](../../docs/frontend-development.md) for setup and cleanup.
+
 This example serves an OBIS occurrence collection using Django and PostGIS.
 From this directory, start it with Docker Compose:
 

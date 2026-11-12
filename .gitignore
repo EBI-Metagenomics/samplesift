@@ -8,3 +8,7 @@ frontend/**/dist/
 .idea
 .idea/*
 src/samplesift/django/static/samplesift/components/
+
+.mi/
+.ipynb_checkpoints/
+examples/selected-occurrences.csv
