@@ -25,7 +25,7 @@ jobs:
           node-version: 24
 
       - name: Install Python dependencies
-        run: uv sync --locked
+        run: uv sync --locked --extra jupyter
 
       - name: Lint Python with Ruff
         run: uvx ruff@0.17.3 check --no-fix .
@@ -38,6 +38,11 @@ jobs:
 
       - name: Test frontend data layer
         run: npm test --prefix frontend
+
+      - name: Test Jupyter wrapper
+        run: |
+          uv run --locked --extra jupyter --group notebook pytest -p no:django tests/test_jupyter.py
+          node --test tests/jupyter-widget.test.mjs
 
       - name: Lint with Biome
         run: uv run pre-commit run biome-lint --all-files

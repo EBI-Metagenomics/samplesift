@@ -1,3 +1,4 @@
+import { createServer } from 'node:http';
 import { expect, test, type Page } from '@playwright/test';
 import type { SampleSift } from '../src/components/sample-sift';
 import type {
@@ -220,4 +221,83 @@ test('removing and reconnecting an instance preserves state and recreates one us
   await first.getByRole('button', { name: 'Clear filters', exact: true }).click();
   await expect(first.getByTestId('match-count')).toContainText('24');
   await expect(first.locator('tbody tr[data-accession]')).toHaveCount(10);
+});
+
+test('map workers load from Vite when embedded on a notebook origin', async ({ page }) => {
+  const host = createServer((request, response) => {
+    if (request.url?.startsWith('/tiles/')) {
+      response.setHeader('Content-Type', 'application/vnd.mapbox-vector-tile');
+      response.end(Buffer.alloc(0));
+      return;
+    }
+    response.setHeader('Content-Type', 'text/html');
+    response.end('<!doctype html><html><body></body></html>');
+  });
+  await new Promise<void>(resolve => host.listen(0, '127.0.0.1', resolve));
+  const address = host.address();
+  if (!address || typeof address === 'string') throw new Error('Missing test host port');
+  const origin = `http://127.0.0.1:${address.port}`;
+  const wrongOriginRequests: string[] = [];
+  page.on('request', request => {
+    if (request.url().startsWith(`${origin}/@fs/`)) wrongOriginRequests.push(request.url());
+  });
+  try {
+    await page.goto(origin);
+    const preflight = await page.request.fetch('http://127.0.0.1:5173/samplesift/openapi.json', {
+      method: 'OPTIONS',
+      headers: { Origin: origin, 'Access-Control-Request-Method': 'QUERY' },
+    });
+    expect(preflight.status()).toBe(204);
+    expect(preflight.headers()['access-control-allow-origin']).toBe(origin);
+    expect(preflight.headers()['access-control-allow-methods'].split(',')).toContain('QUERY');
+    await page.evaluate(async (records) => {
+      await import('http://127.0.0.1:5173/src/index.ts');
+      const map = document.createElement('sample-sift-map') as HTMLElement & {
+        samples: Sample[];
+        mapStyle: unknown;
+      };
+      map.style.height = '420px';
+      map.mapStyle = { version: 8, sources: {}, layers: [{ id: 'background', type: 'background' }] };
+      map.samples = records;
+      document.body.append(map);
+    }, samples);
+    await expect.poll(() => page.locator('sample-sift-map').evaluate(element => {
+      const map = (element as HTMLElement & { _map?: import('maplibre-gl').Map })._map;
+      return map?.getSource('samplesift-samples')
+        ? map.querySourceFeatures('samplesift-samples').length : 0;
+    })).toBeGreaterThan(0);
+    await page.evaluate((base) => {
+      const events: Array<{ loading: boolean; ready: boolean }> = [];
+      (window as Window & { tileEvents: typeof events }).tileEvents = events;
+      const map = document.querySelector('sample-sift-map') as HTMLElement & {
+        tileSource: import('../src/collection/tiles').CollectionTileSource;
+      };
+      map.addEventListener('collectiontileschange', event => events.push((event as CustomEvent).detail));
+      map.tileSource = { urlTemplate: `${base}/tiles/{z}/{x}/{y}`, sourceLayer: 'occurrences', body: {} };
+    }, origin);
+    await expect.poll(() => page.evaluate(() => (
+      window as Window & { tileEvents: Array<{ loading: boolean }> }
+    ).tileEvents.some(event => event.loading))).toBe(true);
+    await expect.poll(() => page.evaluate(() => (
+      window as Window & { tileEvents: Array<{ ready: boolean }> }
+    ).tileEvents.some(event => event.ready))).toBe(true);
+    await page.evaluate(() => {
+      const form = document.createElement('sample-sift-collection-filter-form') as HTMLElement & {
+        metadata: import('../src/collection/types').CollectionMetadata;
+      };
+      form.metadata = {
+        fields: [{ name: 'depth', kind: 'number', nullable: true, operators: ['=', '>=', '<=', 'isNull'] }],
+        sortValues: [], defaultLimit: 25, maxLimit: 500, resultColumns: [], queryablesSchema: {}, diagnostics: [],
+      };
+      document.body.append(form);
+    });
+    await expect(page.locator('sample-sift-collection-filter-form gui-grid-layout').first()).toBeAttached();
+    await expect(page.locator('sample-sift-collection-filter-form').getByRole('button', { name: 'Apply filters', exact: true })).toBeVisible();
+    await page.locator('sample-sift-collection-filter-form').getByLabel('Depth: condition', { exact: true }).selectOption('>=');
+    await expect(page.locator('sample-sift-collection-filter-form').getByLabel('Depth: value', { exact: true })).toBeVisible();
+    await expect(page.locator('sample-sift-collection-filter-form .error[role="alert"]')).toHaveCount(0);
+    expect(wrongOriginRequests).toEqual([]);
+  } finally {
+    await new Promise<void>((resolve, reject) => host.close(error => error ? reject(error) : resolve()));
+  }
 });

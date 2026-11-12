@@ -97,6 +97,27 @@ tasks:
       - task: frontend:typecheck
       - task: frontend:test
 
+  jupyter:setup:
+    desc: Install JupyterLab and optional widget dependencies
+    cmds:
+      - uv sync --locked --extra jupyter --group notebook
+
+  jupyter:lab:
+    desc: Open the SampleSift widget example in JupyterLab
+    cmds:
+      - uv run --locked --extra jupyter --group notebook python -m jupyterlab examples/jupyter.ipynb {{.CLI_ARGS}}
+
+  jupyter:test:
+    desc: Test the optional Jupyter wrapper
+    cmds:
+      - uv run --locked --extra jupyter --group notebook pytest -p no:django tests/test_jupyter.py {{.CLI_ARGS}}
+      - node --test tests/jupyter-widget.test.mjs
+
+  build:
+    desc: Build the Python wheel and source distribution
+    cmds:
+      - uv build {{.CLI_ARGS}}
+
   hooks:install:
     desc: Install the Git pre-commit hook
     cmds:
