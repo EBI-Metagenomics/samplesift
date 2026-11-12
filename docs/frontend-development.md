@@ -79,3 +79,12 @@ PLAYWRIGHT_CHANNEL=chrome task frontend:test:browser
 ```
 
 Run `task --list` for task descriptions.
+
+## Proxy requests
+
+Browser requests to `/samplesift` go to the Vite origin. Vite forwards them to
+`SAMPLESIFT_API_TARGET`; seeing the frontend port in browser network tools is
+expected. A 502 response can mean the API is unavailable or the proxy target is
+wrong. Restart Vite after changing the target. Production hosts need their own
+API proxy or suitable CORS configuration; this development proxy is not shipped
+as an API server in the npm package.

@@ -126,6 +126,6 @@ Both examples assume `/samplesift` is routed to a compatible API on the same ori
 
 ## Local preview and boundaries
 
-Run the frontend development server and open [`/demo/styling.html`](demo/styling.html) to compare the default colours and the shared blue theme. This styling demo explicitly opts into full layout and the table so every styled area is visible. Both examples use the configured local collection API.
+From a source checkout, run the frontend development server and open `/demo/styling.html` ([demo source](https://github.com/EBI-Metagenomics/samplesift/blob/main/frontend/packages/components/demo/styling.html)) to compare the default colours and the shared blue theme. This styling demo explicitly opts into full layout and the table so every styled area is visible. Both examples use the configured local collection API.
 
 CSS changes the surrounding UI. Raster imagery, sample markers, clusters and drawn geometry are rendered by MapLibre and are not styled with these CSS variables. Use the existing `mapLayers`/`mapStyle` configuration for map sources and styles. No new slots or replacement-renderer API is introduced by these styling hooks.

@@ -291,11 +291,17 @@ test('map workers load from Vite when embedded on a notebook origin', async ({ p
       };
       document.body.append(form);
     });
-    await expect(page.locator('sample-sift-collection-filter-form gui-grid-layout').first()).toBeAttached();
-    await expect(page.locator('sample-sift-collection-filter-form').getByRole('button', { name: 'Apply filters', exact: true })).toBeVisible();
-    await page.locator('sample-sift-collection-filter-form').getByLabel('Depth: condition', { exact: true }).selectOption('>=');
-    await expect(page.locator('sample-sift-collection-filter-form').getByLabel('Depth: value', { exact: true })).toBeVisible();
-    await expect(page.locator('sample-sift-collection-filter-form .error[role="alert"]')).toHaveCount(0);
+    const form = page.locator('sample-sift-collection-filter-form');
+    await form.getByRole('button', { name: 'Add filter', exact: true }).click();
+    await form.getByRole('button', { name: 'Add Depth filter', exact: true }).click();
+    const depth = form.getByRole('group', { name: 'Depth filter', exact: true });
+    await expect(depth.locator('gui-grid-layout').first()).toBeAttached();
+    await expect(form.getByRole('button', { name: 'Apply filters', exact: true })).toBeVisible();
+    await depth.getByRole('button', { name: 'Change Depth condition', exact: true }).click();
+    await depth.getByLabel('Condition', { exact: true }).selectOption('>=');
+    await depth.getByLabel('Value', { exact: true }).fill('10');
+    await expect(depth.getByLabel('Value', { exact: true })).toHaveValue('10');
+    await expect(form.locator('.error[role="alert"]')).toHaveCount(0);
     expect(wrongOriginRequests).toEqual([]);
   } finally {
     await new Promise<void>((resolve, reject) => host.close(error => error ? reject(error) : resolve()));

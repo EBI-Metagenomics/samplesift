@@ -1,8 +1,113 @@
 # SampleSift components
 
-`<sample-sift>` is an embeddable browser explorer built with Lit, MapLibre GL JS, Terra Draw and Golem. **Collection mode** discovers backend queryables and OpenAPI metadata, builds typed filters, sends CQL2 over HTTP `QUERY`, and combines result pages with filtered vector tiles. See the [collection API guide](COLLECTION_API.md).
+Embeddable web components for exploring SampleSift collections, with a reusable
+standalone map. Built with Lit and MapLibre, they work in React, Django templates
+and other browser applications. CSS variables and named parts let the host theme
+them without replacing the default design.
 
-The original **legacy sample mode** remains available: fixed N50/taxonomy/biome/date filters, `SampleDataSource`, and explicit `demo` mode with synthetic sample/assembly evidence. Its proposed `POST /samples/search` contract is documented below. The configured collection service is not automatically MGnify data. `<sample-sift-map>` supplies the map alone.
+The complete explorer connects to a compatible **collection API** for filter
+metadata, result pages and clustered map tiles. The npm package supplies the UI;
+it does not install the Python backend or include a biological dataset. You can
+connect to an API someone already operates. The Python SampleSift package provides
+that API, and another implementation can follow the same
+[collection contract](COLLECTION_API.md#api-compatibility).
+
+Python releases also bundle the frontend for Django's `{% samplesift %}` template
+tag, so Django users can use that route without npm. The npm package is for hosts
+that manage their own frontend assets. The two packages have independent versions;
+compatibility follows the collection API contract.
+
+The standalone `<sample-sift-map>` works with points supplied by your application
+and does not need a SampleSift API.
+
+## Install
+
+In an existing application with a JavaScript bundler:
+
+```sh
+npm install @samplesift/components
+```
+
+Use Node.js 22.12 or newer for the package tooling. Import the package from your
+**browser entry point** to register its custom elements:
+
+```js
+import '@samplesift/components';
+```
+
+For server-rendered applications, load this import only on the client. The
+separate `@samplesift/components/data` entry contains helpers that can be imported
+without a browser DOM. The browser components need WebGL support.
+
+## Connect to an existing API
+
+After the browser import, add this to your page or React JSX:
+
+```html
+<sample-sift
+  api-url="/samplesift"
+  collection="occurrences"
+  tile-layer="occurrences"
+></sample-sift>
+```
+
+Replace the collection and tile layer with names provided by your API. `api-url`
+is the API root, including its mount path; it is not an individual results URL.
+The host must route `/samplesift` to the running API, or use a separate origin
+that permits CORS requests with the `QUERY` method. npm installation does not set
+up that routing. See [API compatibility](COLLECTION_API.md#api-compatibility).
+
+The default is a compact map with collapsible filters and an explicit **Apply
+filters** button. Add `show-table` to enable a Results panel. Add `layout="full"`
+for the expanded layout; the table remains a separate opt-in. The component does
+not change your application's URL or routing.
+
+For React and Django template setup, including static asset deployment, see the
+[styling and integration examples](STYLING.md). An
+[EBI Visual Framework React example](examples/styling/react-vf/README.md) is also
+included in the package.
+
+## Use the map with your own points
+
+This example needs no SampleSift API. Default basemap images still come from the
+configured map providers.
+
+Add the element to your HTML:
+
+```html
+<sample-sift-map id="sample-map" style="height: 420px"></sample-sift-map>
+```
+
+Then run this from the browser entry point after the element exists:
+
+```js
+import '@samplesift/components';
+
+const map = document.querySelector('#sample-map');
+map.samples = [{
+  accession: 'EXAMPLE-001',
+  title: 'Example marine sample',
+  longitude: -5.2,
+  latitude: 36.1,
+  biome: 'Marine',
+  collectionDate: null,
+}];
+map.addEventListener('selectionchange', event => {
+  // GeoJSON Polygon, or null when the user clears the selection.
+  console.log(event.detail.geometry);
+});
+```
+
+Point input uses the package's `Sample` format, as shown above. Drawing emits a
+selection for your application to handle; it does not fetch or filter records by
+itself. Supplied points render as individual markers, without client-side
+clustering. No 100k-record performance claim is made for this mode.
+
+For a small local-data demonstration, the original **legacy sample mode** also
+accepts `createFixtureDataSource(samples)` or the explicit `demo` attribute. It
+uses fixed N50/taxonomy/biome/date filters and scans the loaded array; its map
+shows the current result page. This is separate from API-backed collection mode.
+The configured collection service is not automatically MGnify data.
 
 ## Develop and build
 
@@ -20,7 +125,7 @@ npm run test:browser
 
 If Chrome is already installed, `PLAYWRIGHT_CHANNEL=chrome npm run test:browser` can use it instead of downloading Chromium. These are verification commands, not a claim that they have been run in your environment.
 
-The target is the backend origin; the development proxy keeps browser API requests on `/samplesift`. The main `/` demo uses the `occurrences` collection. `/demo/compact.html` shows two independent compact embeds. `/demo/collection-url.html` demonstrates two collection widgets with host-owned URLs. The synthetic legacy demo is at `/demo/legacy.html`; `/demo/contract.html` and `/demo/url-state.html` retain the legacy integration examples. Those synthetic pages also work with plain `npm run dev` and no backend target. See [the proxy guidance](COLLECTION_API.md#development-proxy-and-limits) for production and CORS considerations.
+`SAMPLESIFT_API_TARGET` sets the backend origin; the development proxy keeps browser API requests on `/samplesift`. The main `/` demo uses the `occurrences` collection. `/demo/compact.html` shows two independent compact embeds. `/demo/collection-url.html` demonstrates two collection widgets with host-owned URLs. The synthetic legacy demo is at `/demo/legacy.html`; `/demo/contract.html` and `/demo/url-state.html` retain the legacy integration examples. Those synthetic pages also work with plain `npm run dev` and no backend target. See [the proxy guidance](COLLECTION_API.md#development-proxy-and-limits) for production and CORS considerations.
 
 `npm run build` checks TypeScript and writes ES modules, declarations, and worker assets to `packages/components/dist/`. Run `npm run preview` and open `/embed.html` to inspect a plain HTML consumer of the build.
 
@@ -106,7 +211,7 @@ Serve the complete `dist/` directory over HTTP, preserving its relative file lay
 
 The custom elements register on import. Their styles are contained in Shadow DOM; keep the emitted JavaScript chunks and worker assets together. Browser DOM and WebGL support are required; server-side rendering is outside this prototype's scope.
 
-A bundler-based host can install the local workspace package and import `@samplesift/components`. This repository does not imply that the package has been published to a registry.
+A bundler-based host imports `@samplesift/components` as shown in the installation quick start. For release testing before publication, install the generated `.tgz` archive in the consumer application.
 
 For a backend that implements the query transport described below:
 
@@ -298,7 +403,7 @@ window.addEventListener('popstate', restore);
 restore();
 ```
 
-For an application router, perform the same read/patch/restore steps through its navigation API instead of calling `history` directly. Remove host listeners when disposing the integration. See `/demo/url-state.html` and [its source](demo/url-state.ts) for two synthetic instances with independent namespaces.
+For an application router, perform the same read/patch/restore steps through its navigation API instead of calling `history` directly. Remove host listeners when disposing the integration. See `/demo/url-state.html` and [its source](https://github.com/EBI-Metagenomics/samplesift/blob/main/frontend/packages/components/demo/url-state.ts) for two synthetic instances with independent namespaces.
 
 ## Legacy methods and events
 
@@ -346,7 +451,7 @@ const map = document.querySelector('#selection-map');
 map.samples = samples;
 map.selection = null; // Property assignment is silent.
 map.setMode('rectangle'); // 'rectangle', 'polygon', or 'select'
-map.fitSamples(); // Fit only the current sample page.
+map.fitSamples(); // Fit the supplied samples (the current page when used by the legacy explorer).
 map.selectSample('SAMPLE-001'); // Highlight without searching.
 map.addEventListener('selectionchange', event => console.log(event.detail.geometry));
 map.addEventListener('sampleclick', event => console.log(event.detail.sample));

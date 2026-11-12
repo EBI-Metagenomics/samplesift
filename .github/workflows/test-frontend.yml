@@ -2,6 +2,11 @@ name: Test frontend
 
 on:
   workflow_call:
+    inputs:
+      release_checks:
+        description: Run lint and browser checks before publishing either package.
+        type: boolean
+        default: false
   pull_request:
     paths:
       - frontend/**
@@ -27,9 +32,17 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: 24
+          package-manager-cache: false
+
+      - name: Test release tag validation
+        run: node --test tests/check-npm-release.test.mjs
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Lint frontend
+        if: inputs.release_checks
+        run: npm run lint
 
       - name: Check TypeScript types
         run: npm run typecheck
@@ -49,3 +62,11 @@ jobs:
       - name: Pack package (dry run)
         working-directory: frontend/packages/components
         run: npm pack --dry-run
+
+      - name: Install Chromium for release checks
+        if: inputs.release_checks
+        run: npx playwright install --with-deps chromium
+
+      - name: Run browser release checks
+        if: inputs.release_checks
+        run: npm run test:browser
