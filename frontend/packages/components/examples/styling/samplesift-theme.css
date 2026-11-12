@@ -1,0 +1,32 @@
+/* The same stylesheet works in React, Django templates, and plain HTML. */
+.sample-theme {
+  --samplesift-font: system-ui, sans-serif;
+  --samplesift-text: #18324c;
+  --samplesift-muted: #536b83;
+  --samplesift-accent: #175da8;
+  --samplesift-accent-hover: #104b8a;
+  --samplesift-on-accent: #fff;
+  --samplesift-surface: #fff;
+  --samplesift-surface-muted: #f0f6fc;
+  --samplesift-border-color: #c9d9ea;
+  --samplesift-control-background: #fff;
+  --samplesift-control-text: #18324c;
+  --samplesift-control-border-color: #819bb5;
+  --samplesift-focus-color: #175da8;
+  --samplesift-radius: 12px;
+  --samplesift-control-radius: 6px;
+  --samplesift-filter-card-padding: 14px;
+  --samplesift-map-height: 420px;
+}
+
+/* Parts allow selected layout/details to differ from the default design. */
+.sample-theme sample-sift::part(apply-button) {
+  min-height: 44px;
+  letter-spacing: 0.02em;
+}
+
+.sample-theme sample-sift::part(table-header-cell) {
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 12px;
+}

@@ -1,0 +1,39 @@
+/* Map the host's VF 2 theme to SampleSift. Fallbacks use VF 2.5.30 values. */
+.ebi-samplesift {
+  --samplesift-font: "IBM Plex Sans", Helvetica, Arial, sans-serif;
+  --samplesift-text: var(--vf-color__text--primary, #1a1c1a);
+  --samplesift-muted: var(--vf-color__text--secondary, #373a36);
+  --samplesift-accent: var(--vf-color__button__background--primary, #3b6fb6);
+  --samplesift-accent-hover: var(--vf-color__link--hover, #193f90);
+  --samplesift-on-accent: #fff;
+  --samplesift-focus-color: var(--vf-color__link--hover, #193f90);
+  --samplesift-surface: #fff;
+  --samplesift-surface-muted: var(--vf-color--neutral--100, #f3f3f3);
+  --samplesift-border-color: var(--vf-color--neutral--200, #e4e4e4);
+  --samplesift-control-background: #fff;
+  --samplesift-control-text: var(--samplesift-text);
+  --samplesift-control-border-color: var(--samplesift-muted);
+
+  /* Application layout choices, independent of VF's colour tokens. */
+  --samplesift-radius: 4px;
+  --samplesift-control-radius: 4px;
+  --samplesift-panel-padding: 24px;
+}
+
+/* Named parts reach the nested controls without relying on internal classes. */
+.ebi-samplesift sample-sift::part(apply-button) {
+  min-height: 44px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.ebi-samplesift sample-sift::part(table-header-cell) {
+  font-size: 14px;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.ebi-samplesift sample-sift::part(table-cell) {
+  font-size: 14px;
+  padding: 12px 16px;
+}
