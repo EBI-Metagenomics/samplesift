@@ -32,7 +32,7 @@ class Property:
 
 
 class Point:
-    """A WGS84 point copied from a source point or assembled from longitude/latitude."""
+    """A WGS84 point resolved from source fields or typed collection properties."""
 
     def __init__(
         self,
@@ -147,29 +147,40 @@ class SampleSiftCollection:
 
         declaration = cls.geometry
         if not isinstance(declaration, Point):
-            raise CollectionDefinitionError(f"{cls.__name__}.geometry must be a Point declaration.")
+            raise CollectionDefinitionError(
+                f"{cls.__name__}.geometry must be a Point declaration."
+            )
         source = cls.source_model()
-        if declaration.field is not None:
-            try:
-                source_field = source._meta.get_field(declaration.field)
-            except Exception as error:
-                raise CollectionDefinitionError(
-                    f"{cls.__name__}.geometry references unknown field {declaration.field!r}."
-                ) from error
-            if not isinstance(source_field, gis_models.PointField):
-                raise CollectionDefinitionError("Point field= must reference a GeoDjango PointField.")
-            return gis_models.PointField(srid=WGS84_SRID, null=source_field.null)
-
-        for name in (declaration.longitude, declaration.latitude):
+        properties = cls.properties()
+        names = (
+            (declaration.field,)
+            if declaration.field is not None
+            else (declaration.longitude, declaration.latitude)
+        )
+        for name in names:
             assert name is not None
-            try:
-                source_field = source._meta.get_field(name)
-            except Exception as error:
+            if name in properties:
+                source_field = properties[name].field
+            else:
+                try:
+                    source_field = source._meta.get_field(name)
+                except Exception as error:
+                    raise CollectionDefinitionError(
+                        f"{cls.__name__}.geometry references unknown field {name!r}."
+                    ) from error
+            if declaration.field is not None:
+                if not isinstance(source_field, gis_models.PointField):
+                    raise CollectionDefinitionError(
+                        "Point field= must reference a GeoDjango PointField."
+                    )
+                return gis_models.PointField(srid=WGS84_SRID, null=source_field.null)
+            if not isinstance(
+                source_field,
+                (models.IntegerField, models.FloatField, models.DecimalField),
+            ):
                 raise CollectionDefinitionError(
-                    f"{cls.__name__}.geometry references unknown field {name!r}."
-                ) from error
-            if not isinstance(source_field, (models.IntegerField, models.FloatField, models.DecimalField)):
-                raise CollectionDefinitionError("Point longitude/latitude fields must be numeric.")
+                    "Point longitude/latitude fields must be numeric."
+                )
         return gis_models.PointField(srid=WGS84_SRID, null=True)
 
     @classmethod
@@ -247,24 +258,34 @@ class SampleSiftCollection:
         if name == "geometry" and cls.geometry is not None:
             declaration = cls.geometry
             if declaration.field is not None:
-                value = getattr(instance, declaration.field)
+                value = cls._value_for_field(instance, declaration.field)
                 if value is None:
                     return None
                 value = value.clone()
                 if value.srid != WGS84_SRID:
                     value.transform(WGS84_SRID)
                 return value
-            longitude = getattr(instance, declaration.longitude)  # type: ignore[arg-type]
-            latitude = getattr(instance, declaration.latitude)  # type: ignore[arg-type]
+            assert (
+                declaration.longitude is not None and declaration.latitude is not None
+            )
+            longitude = cls._value_for_field(instance, declaration.longitude)
+            latitude = cls._value_for_field(instance, declaration.latitude)
             if longitude is None or latitude is None:
                 return None
             from django.contrib.gis.geos import Point as GEOSPoint
 
             return GEOSPoint(float(longitude), float(latitude), srid=WGS84_SRID)
+        return cls._value_for_field(instance, name)
+
+    @classmethod
+    def _value_for_field(cls, instance: models.Model, name: str) -> Any:
+        """Resolve a source field or property without entering geometry assembly."""
         property_declaration = cls.properties().get(name)
         if property_declaration is None:
             source_field = cls.source_model()._meta.get_field(name)
-            return getattr(instance, source_field.attname if source_field.is_relation else name)
+            return getattr(
+                instance, source_field.attname if source_field.is_relation else name
+            )
 
         prepare = getattr(cls, f"prepare_{name}", None)
         if prepare is not None:
