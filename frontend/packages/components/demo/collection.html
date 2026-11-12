@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SampleSift · Collection embeds</title>
+<style>body{font:14px system-ui;margin:24px;background:#f3f5ef;color:#234031}sample-sift{margin:24px 0}h1{font-size:24px}a{color:#16674f}</style></head>
+<body><a href="/">← Main explorer</a><h1>Independent collection explorers</h1>
+<p>Each instance discovers its collection's filters. Browser routing is unchanged by default.</p>
+<sample-sift id="first" api-url="/samplesift" collection="occurrences" tile-layer="occurrences" page-size="2"></sample-sift>
+<sample-sift id="second" api-url="/samplesift" collection="occurrences" tile-layer="occurrences" page-size="2"></sample-sift>
+<script type="module">
+import '../src/index.ts';
+for (const explorer of document.querySelectorAll('sample-sift')) explorer.mapStyle = {version:8,sources:{},layers:[{id:'background',type:'background',paint:{'background-color':'#e8eee3'}}]};
+</script></body></html>

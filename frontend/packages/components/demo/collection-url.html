@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SampleSift · Host-owned collection state</title>
+<style>body{font:14px/1.5 system-ui;margin:24px;background:#f3f5ef;color:#234031}sample-sift{margin:24px 0}h1{font-size:24px}a{color:#16674f}[role=alert]{color:#963f28;background:#fff5ef;padding:12px}[role=alert]:empty{display:none}</style></head>
+<body><a href="/">← Main explorer</a><h1>Host-owned collection URL state</h1>
+<p>This host opts into saving filters, sort order and drawn geometry. Use Back and Forward after applying filters.</p>
+<p>The two widgets use independent namespaces. Invalid saved constraints pause searches rather than broaden them.</p>
+<p id="route-error" role="alert"></p>
+<sample-sift id="left" collection-paused api-url="/samplesift" collection="occurrences" tile-layer="occurrences" page-size="10"></sample-sift>
+<sample-sift id="right" collection-paused api-url="/samplesift" collection="occurrences" tile-layer="occurrences" page-size="10"></sample-sift>
+<script type="module" src="./collection-url.ts"></script></body></html>

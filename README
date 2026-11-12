@@ -139,13 +139,14 @@ filter operators, pagination, and map-client integration.
 src/samplesift/       Python package and optional integrations
 tests/                Python test suite
 docs/                 Architecture and design documentation
-frontend/             Reserved, self-contained frontend workspace
+frontend/             Self-contained npm workspace and reusable web components
 ```
 
-The Python package and future npm packages are deliberately independent. The
-frontend will eventually have its own `frontend/package.json` and publishable
-packages under `frontend/packages/`; it must not introduce a root npm workspace
-or couple npm releases to the Python distribution.
+The Python package and npm packages are deliberately independent. The frontend
+has its own `frontend/package.json` and packages under `frontend/packages/`;
+there is no root npm workspace or coupling between npm releases and the Python
+distribution. See [frontend/README.md](frontend/README.md) for development and
+embedding instructions.
 
 Future Python integrations are exposed as extras when implemented, for example
 `samplesift[jupyter]` and `samplesift[sandbox]`.
