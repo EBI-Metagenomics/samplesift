@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "npm run dev --workspace @samplesift/components",
     "build": "npm run build --workspace @samplesift/components",
+    "build:django": "npm run build:django --workspace @samplesift/components",
     "typecheck": "npm run typecheck --workspace @samplesift/components",
     "test": "npm run test --workspace @samplesift/components",
     "test:browser": "npm run test:browser --workspace @samplesift/components",

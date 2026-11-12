@@ -36,8 +36,12 @@ jobs:
       - name: Build frontend components
         run: npm run build --prefix frontend
 
+      - name: Build Django static components
+        run: npm run build:django --prefix frontend
+
       - name: Test frontend data layer
         run: npm test --prefix frontend
 
       - name: Lint with Biome
         run: uv run pre-commit run biome-lint --all-files
+
