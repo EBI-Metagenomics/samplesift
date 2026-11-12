@@ -1,0 +1,6 @@
+{% load static %}
+{% if include_script %}
+    <script type="module"
+            src="{% static 'samplesift/components/sample-sift.js' %}"></script>
+{% endif %}
+<sample-sift api-url="{{ api_url }}" collection="{{ collection }}" tile-layer="{{ tile_layer }}" page-size="{{ page_size }}"{% if filter_mode %} filter-mode="{{ filter_mode }}"{% endif %}{% if filter_debounce_ms is not None %} filter-debounce-ms="{{ filter_debounce_ms }}"{% endif %}{% if id %} id="{{ id }}"{% endif %}{% if class %} class="{{ class }}"{% endif %}></sample-sift>

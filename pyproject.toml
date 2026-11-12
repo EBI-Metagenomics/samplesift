@@ -2,7 +2,7 @@
 name = "samplesift"
 version = "0.1.0"
 description = "Spatial querying and selection of geolocation-tagged data"
-readme = { file = "README", content-type = "text/markdown" }
+readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.12"
 dependencies = []
 
@@ -41,3 +41,9 @@ dev = [
 testpaths = ["tests"]
 pythonpath = ["."]
 DJANGO_SETTINGS_MODULE = "tests.settings"
+
+[tool.djlint]
+profile = "django"
+indent = 4
+max_line_length = 120
+format_attribute_template_tags = true

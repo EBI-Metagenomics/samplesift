@@ -7,6 +7,14 @@ repos:
       - id: ruff-check
         args: [--fix]
 
+  - repo: https://github.com/djlint/djLint
+    rev: v1.50.0
+    hooks:
+      - id: djlint-reformat-django
+        files: ^(src/samplesift/django|examples/[^/]+/[^/]+)/templates/.*\.html$
+      - id: djlint-django
+        files: ^(src/samplesift/django|examples/[^/]+/[^/]+)/templates/.*\.html$
+
   - repo: https://github.com/biomejs/pre-commit
     rev: v2.5.13
     hooks:
