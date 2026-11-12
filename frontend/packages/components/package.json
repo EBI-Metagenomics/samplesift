@@ -4,7 +4,11 @@
   "description": "Framework-agnostic spatial sample explorer built with Lit and MapLibre",
   "type": "module",
   "files": [
-    "dist"
+    "dist",
+    "COLLECTION_API.md",
+    "STYLING.md",
+    "examples",
+    "scripts"
   ],
   "main": "./dist/sample-sift.js",
   "module": "./dist/sample-sift.js",
@@ -22,10 +26,13 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "typecheck": "tsc --noEmit",
-    "build": "npm run typecheck && vite build && tsc -p tsconfig.build.json",
+    "build": "npm run typecheck && vite build && tsc -p tsconfig.build.json && node scripts/prepare-package.mjs",
     "test": "vitest run",
     "test:browser": "playwright test",
-    "preview": "vite preview --host 127.0.0.1"
+    "preview": "vite preview --host 127.0.0.1",
+    "prepack": "npm run build && npm run check:package",
+    "check:package": "node scripts/check-package.mjs",
+    "prepublishOnly": "npm test"
   },
   "engines": {
     "node": ">=22.12.0"
@@ -58,5 +65,23 @@
     "type": "git",
     "url": "git+https://github.com/EBI-Metagenomics/samplesift.git",
     "directory": "frontend/packages/components"
+  },
+  "license": "Apache-2.0",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "sideEffects": true,
+  "keywords": [
+    "web-components",
+    "lit",
+    "maplibre",
+    "geospatial",
+    "biodiversity",
+    "samplesift"
+  ],
+  "homepage": "https://github.com/EBI-Metagenomics/samplesift#readme",
+  "bugs": {
+    "url": "https://github.com/EBI-Metagenomics/samplesift/issues"
   }
 }

@@ -1,0 +1,22 @@
+<!doctype html>
+{% load static %}
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Sample explorer</title>
+    <link rel="stylesheet" href="{% static 'samplesift/samplesift-theme.css' %}">
+    <script type="module" src="{% static 'samplesift/sample-sift.js' %}"></script>
+  </head>
+  <body>
+    <main class="sample-theme">
+      <h1>Explore samples</h1>
+      <sample-sift
+        api-url="/samplesift"
+        collection="occurrences"
+        tile-layer="occurrences"
+        page-size="25"
+      ></sample-sift>
+    </main>
+  </body>
+</html>

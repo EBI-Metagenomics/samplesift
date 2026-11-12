@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SampleSift styling examples</title>
+  <link rel="stylesheet" href="../examples/styling/samplesift-theme.css">
+  <script type="module" src="../src/index.ts"></script>
+  <style>
+    body { margin: 24px; font-family: system-ui, sans-serif; color: #18324c; }
+    h1 { margin-bottom: 8px; } p { max-width: 70ch; line-height: 1.5; }
+    .examples { display: grid; gap: 32px; }
+    .examples > section { min-width: 0; }
+    @media (min-width: 1800px) { .examples { grid-template-columns: 1fr 1fr; } }
+  </style>
+</head>
+<body>
+  <h1>One component, two appearances</h1>
+  <p>Both explorers connect to the same collection. The second inherits a theme from its wrapper and uses named parts for the Apply button and table headings.</p>
+  <div class="examples">
+    <section>
+      <h2>Default</h2>
+      <sample-sift api-url="/samplesift" collection="occurrences" tile-layer="occurrences" page-size="25"></sample-sift>
+    </section>
+    <section class="sample-theme">
+      <h2>Custom theme</h2>
+      <sample-sift api-url="/samplesift" collection="occurrences" tile-layer="occurrences" page-size="25"></sample-sift>
+    </section>
+  </div>
+</body>
+</html>
