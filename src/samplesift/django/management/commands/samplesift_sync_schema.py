@@ -6,11 +6,22 @@ from django.core.exceptions import ImproperlyConfigured
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connections
 
+from ...cache import tile_cache, version_ddl, warm_collection
 from ...registry import registry
 
 
 class Command(BaseCommand):
-    help = "Create missing SampleSift collection tables and report schema drift."
+    help = (
+        "Create missing SampleSift collection tables, report schema drift, and "
+        "prewarm cached empty-query vector tiles."
+    )
+
+    def add_arguments(self, parser: object) -> None:
+        parser.add_argument(  # type: ignore[attr-defined]
+            "--no-warm-cache",
+            action="store_true",
+            help="Skip prewarming the tile cache.",
+        )
 
     def handle(self, *args: object, **options: object) -> None:
         try:
@@ -27,12 +38,33 @@ class Command(BaseCommand):
                 if model._meta.db_table not in tables:
                     editor.create_model(model)
                     self.stdout.write(f"Created {model._meta.db_table}")
-                    continue
-                drift = self._drift(connection, model)
-                if drift:
-                    raise CommandError(
-                        f"Schema drift for {model._meta.db_table}: " + "; ".join(drift)
-                    )
+                else:
+                    drift = self._drift(connection, model)
+                    if drift:
+                        raise CommandError(
+                            f"Schema drift for {model._meta.db_table}: " + "; ".join(drift)
+                        )
+                if collection.geometry is not None:
+                    # Tile cache keys use the table's last-write timestamp.
+                    for sql, params in version_ddl(model._meta.db_table):
+                        editor.execute(sql, params)
+
+        if not options["no_warm_cache"] and tile_cache() is not None:
+            self._warm(alias)
+
+    def _warm(self, alias: str) -> None:
+        from ...api import _zoom_tiles
+
+        for collection in registry.api_collections:
+            query = registry.get_model(collection)._default_manager.using(alias).all()
+            counts = warm_collection(
+                collection,
+                lambda z, collection=collection, query=query: _zoom_tiles(collection, query, z),
+            )
+            self.stdout.write(
+                f"Warmed {sum(counts.values())} tiles for {collection.api_name()} "
+                f"(zoom 0-{max(counts)})"
+            )
 
     def _drift(self, connection: object, model: object) -> list[str]:
         # The command only accepts PostgreSQL above; Django's standard

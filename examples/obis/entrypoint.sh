@@ -2,7 +2,8 @@
 set -eu
 
 python manage.py migrate --noinput
-python manage.py samplesift_sync_schema
+# Warm the tile cache only after the data below is reconciled.
+python manage.py samplesift_sync_schema --no-warm-cache
 
 # loaddata uses raw saves, so it does not invoke collection synchronization.
 python manage.py shell <<'PY'
@@ -24,5 +25,8 @@ for occurrence in Occurrence.objects.iterator():
     occurrence.save()
 print(f"Reconciled {len(source_ids)} OBIS occurrences", flush=True)
 PY
+
+# Reconciling changed the collection version; prewarm empty-query tiles for it.
+python manage.py samplesift_sync_schema
 
 exec python manage.py runserver 0.0.0.0:8000 --noreload
