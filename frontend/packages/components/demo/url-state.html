@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SampleSift · Host-owned URL example</title>
+  <style>
+    body{font:14px/1.6 system-ui;margin:24px;background:#f3f5ef;color:#234031}
+    sample-sift{margin:24px 0}h1{font-size:24px}a{color:#16674f}
+    .toolbar{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+    #route-error{color:#913b25;background:#fff2ea;padding:12px;border:1px solid #dcac9c}
+    #route-error:empty{display:none}code{overflow-wrap:anywhere}
+  </style>
+</head>
+<body>
+  <a href="/">← Main demo</a>
+  <h1>Two widgets, one host-owned URL</h1>
+  <p>This example opts into shareable filter state. Each widget has a separate namespace;
+    the host controls navigation. Try different filters, switch the host tab, then use Back and Forward.</p>
+  <p>Samples and assembly evidence are synthetic. Only filters are saved here; map selections remain local.</p>
+  <div class="toolbar">
+    <label for="host-tab">Host application tab</label>
+    <select id="host-tab"><option value="results">Results</option><option value="overview">Overview</option></select>
+    <span>Current tab: <strong id="current-tab">results</strong></span>
+  </div>
+  <p id="route-error" role="alert"></p>
+  <h2>Left collection</h2>
+  <sample-sift id="left"></sample-sift>
+  <h2>Right collection</h2>
+  <sample-sift id="right"></sample-sift>
+  <script type="module" src="./url-state.ts"></script>
+</body>
+</html>
