@@ -62,20 +62,20 @@ when checking browser changes.
 
 ## Release gates and versioning
 
-Python and npm are independently versioned. Python releases use `v<version>`
-from `pyproject.toml`; npm releases use `npm-v<version>` from the component
-`package.json`, which must match its workspace lockfile entry. Each publishing
-job is guarded by its own prefix. Unrelated releases skip it, and exact version
-validation runs before the test gates. npm also requires the GitHub prerelease
-flag to agree with its SemVer suffix, publishing stable versions to `latest` and
-prereleases to `next`.
+Python and npm are versioned in lockstep and released together. A published
+GitHub release tagged `v<version>` starts both publishers. The tag must match
+`pyproject.toml` and the component `package.json`, which must also match its
+workspace lockfile entry. Every publishing job is guarded by the `v` prefix.
+Releases with other tags skip both pipelines, and both versions are checked before
+the test gates. Only stable `X.Y.Z` releases are supported; npm publishes them
+to `latest`.
 
 The Python pipeline builds Django static assets from the checked-out frontend
 source before `uv build`; it does not fetch a published npm package. Its artifact
 checker validates the wheel and source distribution before publishing. The
 bundled `build-info.json` records the frontend package name/version and source
-revision/dirty state. An npm release does not replace assets in an existing
-Python wheel; that requires a new Python release.
+revision/dirty state. Assets in an existing Python wheel are never replaced;
+updated UI ships in the next shared release.
 
 The npm pipeline builds one archive and uploads it with a checksum. A separate
 publishing job verifies and publishes that exact archive, with lifecycle scripts

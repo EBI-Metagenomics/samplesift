@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   validate-release:
-    if: startsWith(github.event.release.tag_name, 'npm-v')
+    if: startsWith(github.event.release.tag_name, 'v')
     runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.release.outputs.version }}
@@ -30,22 +30,27 @@ jobs:
           node-version: 24
           package-manager-cache: false
 
-      - name: Check npm release tag and package versions
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.3.3
+
+      # Python and npm share the v<version> tag, so both versions must match it.
+      - name: Check release tag and package versions
         id: release
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
           RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
-        run: node frontend/packages/components/scripts/check-npm-release.mjs
+        run: |
+          PYTHON_VERSION="$(uv version --short)" node frontend/packages/components/scripts/check-npm-release.mjs
 
   test-frontend:
-    if: startsWith(github.event.release.tag_name, 'npm-v')
+    if: startsWith(github.event.release.tag_name, 'v')
     needs: validate-release
     uses: ./.github/workflows/test-frontend.yml
     with:
       release_checks: true
 
   build:
-    if: startsWith(github.event.release.tag_name, 'npm-v')
+    if: startsWith(github.event.release.tag_name, 'v')
     needs: [validate-release, test-frontend]
     runs-on: ubuntu-24.04
     steps:
@@ -85,7 +90,7 @@ jobs:
   # Publish the existing archive: no checkout, project dependencies or lifecycle scripts.
   publish:
     name: publish to npm
-    if: startsWith(github.event.release.tag_name, 'npm-v')
+    if: startsWith(github.event.release.tag_name, 'v')
     needs: [validate-release, build]
     runs-on: ubuntu-24.04
     environment:

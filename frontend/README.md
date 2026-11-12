@@ -1,6 +1,6 @@
 # SampleSift frontend
 
-An npm workspace for embeddable Lit components, with versions and release cycles independent of the Python package. The main explorer discovers a collection's queryables and OpenAPI metadata, generates filters with Golem, sends CQL2 over HTTP `QUERY`, and displays result pages alongside filtered vector tiles.
+An npm workspace for embeddable Lit components, versioned and released together with the Python package from one `v<version>` tag. The main explorer discovers a collection's queryables and OpenAPI metadata, generates filters with Golem, sends CQL2 over HTTP `QUERY`, and displays result pages alongside filtered vector tiles.
 
 ## Install in an application
 
@@ -89,4 +89,4 @@ npm run test:browser
 
 If Chrome is installed, `PLAYWRIGHT_CHANNEL=chrome npm run test:browser` can use it instead. These commands describe the verification workflow; consult their current output for results.
 
-The build writes `packages/components/dist/`. Keep JavaScript chunks and worker assets together when deploying. `npm run preview` serves the build; `/embed.html` is a plain HTML legacy consumer. npm and Python versions remain independent. Python releases also bundle these components for Django templates; see the [Python release guide](../docs/python-release.md).
+The build writes `packages/components/dist/`. Keep JavaScript chunks and worker assets together when deploying. `npm run preview` serves the build; `/embed.html` is a plain HTML legacy consumer. npm and Python versions are released in lockstep. Python releases also bundle these components for Django templates; see the [Python release guide](../docs/python-release.md).

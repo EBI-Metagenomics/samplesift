@@ -33,6 +33,12 @@ jobs:
             echo "::error::Python release tag must be v$version"
             exit 1
           fi
+          # npm publishes from the same tag, so its version must match too.
+          npm_version="$(jq -r .version frontend/packages/components/package.json)"
+          if [ "$npm_version" != "$version" ]; then
+            echo "::error::npm version $npm_version must match Python version $version for a shared release"
+            exit 1
+          fi
 
   test-python:
     if: startsWith(github.event.release.tag_name, 'v')

@@ -7,34 +7,34 @@ published GitHub release whose tag is exactly `v` followed by the version in
 short-lived OIDC token from the workflow, so no API token is stored in the
 repository or its secrets.
 
-## Independent Python and npm releases
+## Shared Python and npm releases
 
 | Distribution | Version source | GitHub release tag |
 | --- | --- | --- |
 | Python `samplesift` | `pyproject.toml`, with `uv.lock` updated | `vX.Y.Z` |
-| npm `@samplesift/components` | `frontend/packages/components/package.json`, matching `frontend/package-lock.json` | `npm-vX.Y.Z` |
+| npm `@samplesift/components` | `frontend/packages/components/package.json`, matching `frontend/package-lock.json` | `vX.Y.Z` |
 
-The versions do not need to match. Every job in each publisher checks its tag
-prefix, so an npm release skips the Python pipeline and a Python release skips
-the npm pipeline. Bare version tags do not publish either package. A matching
-prefix with the wrong package version fails validation before tests or builds.
-See [the npm release guide](frontend-release.md) for npm prereleases and channels.
+One published `vX.Y.Z` release starts both publishers, and the versions must match.
+Each publisher checks that the tag equals both the Python and npm versions before
+tests or builds, so a mismatch fails both rather than publishing only one package.
+Releases with other tags, including bare version tags, publish neither package.
+Only stable `X.Y.Z` versions are supported. See
+[the npm release guide](frontend-release.md) for the npm side.
 
 The Python distribution includes the Django API and browser assets for its Django
 integration. These assets are built from the frontend source in the Python
 release's checkout, without downloading the component from the npm registry.
-A Python release therefore does not require an npm release first.
+The Python build therefore does not depend on the npm publish in the same release.
 
 The bundle's `build-info.json` records its frontend package name and version,
 source revision and whether the checkout was dirty when built. It is included
 under `samplesift/django/static/samplesift/components/`, alongside the component
 `LICENSE` and dependency notices. This identifies which UI a Python distribution
-contains without requiring its Python and npm versions to be equal. The
+contains, including in local or unreleased builds. The
 component license does not assign a license to the Python code.
 
-Publishing a newer npm version does not update an existing Python wheel. To
-redistribute updated browser assets through Python, build and publish a new
-Python version from the intended frontend source. Hosts using npm separately
+Published wheels are immutable: updated browser assets reach Python users only
+through a new shared release, which publishes new Python and npm versions together. Hosts using npm separately
 should check the [collection API contract](../frontend/packages/components/COLLECTION_API.md#api-compatibility)
 rather than assume matching version numbers prove compatibility.
 
