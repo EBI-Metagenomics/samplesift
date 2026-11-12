@@ -91,55 +91,49 @@ class SampleCollection(SampleSiftCollection):
 value is `None`. `prepare_<property_name>(source_instance)` takes precedence
 over `attr`; a property must define one of them.
 
-### Computed map coordinates
+### JSON metadata properties
 
-`Point` accepts numeric source fields or typed collection properties for longitude and latitude.
-Properties use the same `prepare_<name>()` methods and `attr` paths as ordinary collection columns.
-For example, extract map coordinates from a source model's `metadata` JSONField:
+Use a typed `Property` with a `prepare_<property_name>()` method for JSONB values.
+For example, extract `lat` from a source model's `metadata` JSONField:
 
 ```python
 from django.db import models
-from samplesift.django import Point, Property, SampleSiftCollection, registry
+from samplesift.django import Property, SampleSiftCollection, registry
 
 from .models import Sample
 
 
 @registry.register
 class SampleCollection(SampleSiftCollection):
+    fields = ["species_name"]
     lat = Property(models.FloatField(null=True))
-    lon = Property(models.FloatField(null=True))
-    geometry = Point(longitude="lon", latitude="lat")
 
     class Meta:
         model = Sample
-        api_name = "samples"
-
-    class Query:
-        default_ordering = ["lat", "lon"]
 
     @staticmethod
     def prepare_lat(sample):
         value = (sample.metadata or {}).get("lat")
         return None if value is None else float(value)
-
-    @staticmethod
-    def prepare_lon(sample):
-        value = (sample.metadata or {}).get("lon")
-        return None if value is None else float(value)
 ```
 
-This example expects a JSON object with numeric or null coordinate values.
-Keep computed properties outside `fields`; that list contains actual source-model fields.
+This example expects a JSON object with a numeric or null `lat` value.
+A missing key produces `None`.
+SampleSift stores the result in a typed, filterable collection column.
+Keep `lat` outside `fields`; that list contains actual source-model fields.
+
+`attr="metadata__lat"` does not support dictionary keys.
+The current traversal uses Python attributes through `getattr()`.
+
+`Point(longitude=..., latitude=...)` accepts numeric source fields or typed properties.
+For example, add a `lon` property the same way and declare `geometry = Point(longitude="lon", latitude="lat")`.
+Longitude and latitude properties must declare an integer, float, or decimal field.
 If either coordinate is `None`, the geometry is `None`.
 Zero is a valid coordinate.
-Longitude and latitude properties must declare an integer, float, or decimal field.
 
 `Point(field="location")` also accepts a `Property` with a GeoDjango `PointField` type.
 Its resolver must return a GeoDjango point or `None`.
 SampleSift copies the point before conversion to EPSG:4326.
-
-`attr="metadata__lat"` still does not support dictionary keys.
-Use a preparation method for JSON values.
 
 ## Storage and schema setup
 
@@ -236,7 +230,7 @@ Every API collection declares a WGS84 `geometry` and `Query.default_ordering`.
 Its API name defaults to the source model class name converted to lowercase
 kebab case (`AirQualitySample` becomes `air-quality-sample`); set the optional
 unique `Meta.api_name` to override it. `Point` accepts a source GeoDjango point field
-(`Point(field="location")`) or numeric longitude and latitude fields or properties. The
+(`Point(field="location")`) or numeric longitude and latitude attributes. The
 generated table has a spatial GiST index; run `samplesift_sync_schema` after
 adding it.
 
@@ -248,8 +242,7 @@ Each API collection has discovery and two static `QUERY` endpoints:
   By default, through zoom 14 it groups filtered points by proximity in Web Mercator using
   PostGIS DBSCAN with a 40-pixel distance and a minimum of one point. Connected
   chains of nearby points form one cluster, so a cluster can span more than 40
-  pixels. Pixels are screen pixels of MapLibre's default 512-pixel vector tiles.
-  Clustering considers the entire filtered collection before selecting
+  pixels. Clustering considers the entire filtered collection before selecting
   cluster centroids for a tile, ensuring adjacent tiles agree on membership. This
   can be expensive for large collections. By default, at zoom 15 and above it returns
   individual points. Cluster IDs depend on membership and are not permanent.
@@ -329,32 +322,6 @@ Spatial collection indexes use Django's PostgreSQL `GistIndex`; creating and
 registering a spatial collection therefore requires Django's PostgreSQL support
 and its database driver as well as the PostGIS database. Add
 `django.contrib.postgres` to `INSTALLED_APPS` for spatial collections.
-
-## Embedding the explorer
-
-The `samplesift` template tag renders the `<sample-sift>` collection explorer for a
-registered spatial collection. The host project needs `django.contrib.staticfiles`
-and `STATIC_URL`, and must include `api.urls` in its URL configuration.
-
-```django
-{% load samplesift %}
-{% samplesift "occurrences" %}
-{% samplesift "occurrences" page_size=25 filter_mode="manual" id="left" class="explorer" %}
-```
-
-| Argument | Default | Meaning |
-| --- | --- | --- |
-| collection | required | The collection's `api_name`; an unknown name raises `KeyError`. |
-| `page_size` | `SAMPLESIFT_DEFAULT_PAGE_SIZE` | Results per page, capped at `SAMPLESIFT_MAX_PAGE_SIZE`. |
-| `filter_mode` | component default (`auto`) | `auto` applies filters as they change; `manual` adds an Apply step. |
-| `filter_debounce_ms` | component default (500) | Delay before automatic filters apply. |
-| `api_url` | reversed API root | Override when the API is served from another host. |
-| `id`, `class` | none | Copied onto the element. |
-
-The tile layer is the collection's `api_name`. The module script is emitted once per
-template render. The built components are not committed: run
-`npm run build:django --prefix frontend` before building the Python package; it writes
-them to `src/samplesift/django/static/samplesift/components/`.
 
 ## API settings
 
