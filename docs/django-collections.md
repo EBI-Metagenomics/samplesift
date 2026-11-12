@@ -198,7 +198,8 @@ Each API collection has discovery and two static `QUERY` endpoints:
   By default, through zoom 14 it groups filtered points by proximity in Web Mercator using
   PostGIS DBSCAN with a 40-pixel distance and a minimum of one point. Connected
   chains of nearby points form one cluster, so a cluster can span more than 40
-  pixels. Clustering considers the entire filtered collection before selecting
+  pixels. Pixels are screen pixels of MapLibre's default 512-pixel vector tiles.
+  Clustering considers the entire filtered collection before selecting
   cluster centroids for a tile, ensuring adjacent tiles agree on membership. This
   can be expensive for large collections. By default, at zoom 15 and above it returns
   individual points. Cluster IDs depend on membership and are not permanent.

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import ClassVar
 
 import pytest
@@ -191,3 +192,14 @@ def test_tile_clustering_uses_configured_zoom_and_radius(settings, monkeypatch) 
 
     _mvt(ApiSampleCollection, query, 3, 0, 0)
     assert "ST_ClusterDBSCAN" not in cursor.execute.call_args.args[0]
+
+
+def test_cluster_radius_uses_512_pixel_vector_tiles() -> None:
+    from samplesift.django.constants import (
+        VECTOR_TILE_SIZE,
+        WEB_MERCATOR_INITIAL_RESOLUTION,
+    )
+
+    equator = 2 * math.pi * 6378137
+    assert math.isclose(WEB_MERCATOR_INITIAL_RESOLUTION * VECTOR_TILE_SIZE, equator)
+    assert VECTOR_TILE_SIZE == 512
