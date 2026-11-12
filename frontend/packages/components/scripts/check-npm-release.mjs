@@ -3,8 +3,8 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const PACKAGE_NAME = '@microbiome-informatics/samplesift';
-// npm releases use SemVer without build metadata, which npm can normalize away.
-const RELEASE_VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
+// Shared releases are stable X.Y.Z, which is valid as both SemVer and PEP 440.
+const RELEASE_VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
 /** Validate the npm side of a shared v<version> release for Python and npm. */
 export function validateNpmRelease({ manifest, lockfile, tag, prerelease, pythonVersion }) {
