@@ -125,8 +125,15 @@ Keep `lat` outside `fields`; that list contains actual source-model fields.
 `attr="metadata__lat"` does not support dictionary keys.
 The current traversal uses Python attributes through `getattr()`.
 
-`Point(longitude=..., latitude=...)` currently requires numeric source-model fields.
-Computed `Property` values cannot supply geometry coordinates.
+`Point(longitude=..., latitude=...)` accepts numeric source fields or typed properties.
+For example, add a `lon` property the same way and declare `geometry = Point(longitude="lon", latitude="lat")`.
+Longitude and latitude properties must declare an integer, float, or decimal field.
+If either coordinate is `None`, the geometry is `None`.
+Zero is a valid coordinate.
+
+`Point(field="location")` also accepts a `Property` with a GeoDjango `PointField` type.
+Its resolver must return a GeoDjango point or `None`.
+SampleSift copies the point before conversion to EPSG:4326.
 
 ## Storage and schema setup
 
