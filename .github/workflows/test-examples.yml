@@ -1,0 +1,27 @@
+name: Test examples
+
+on:
+  workflow_call:
+  pull_request:
+    paths:
+      - examples/**
+      - .github/workflows/test-examples.yml
+  merge_group:
+
+permissions:
+  contents: read
+
+jobs:
+  obis:
+    name: obis
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.3.3
+
+      - name: Check OBIS fixture
+        run: uv run --locked pytest -p no:django tests/test_obis_fixture.py

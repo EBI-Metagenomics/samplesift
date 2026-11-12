@@ -171,6 +171,9 @@ libraries required by GeoDjango. `tests.postgis_settings` remains available as
 an alias for the shared test settings. If Django cannot discover those libraries,
 set `GDAL_LIBRARY_PATH` and `GEOS_LIBRARY_PATH` to their installed paths.
 
+CI runs this suite in `.github/workflows/test-python.yml` against the same
+PostGIS image and port; see [development checks](development.md#continuous-integration).
+
 ## Spatial query API
 
 Mount the ready-made Django Ninja API in the host project's URL configuration:
