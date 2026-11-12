@@ -11,6 +11,8 @@ from samplesift.django.config import get_settings
     ("SAMPLESIFT_MAX_PAGE_SIZE", 0),
     ("SAMPLESIFT_CLUSTER_RADIUS_PIXELS", 1.5),
     ("SAMPLESIFT_CLUSTER_MAX_ZOOM", -1),
+    ("SAMPLESIFT_CACHE_TIMEOUT", 0),
+    ("SAMPLESIFT_CACHE_ALIAS", "missing"),
 ])
 def test_invalid_configuration_is_rejected(settings, name, value):
     setattr(settings, name, value)
