@@ -91,6 +91,56 @@ class SampleCollection(SampleSiftCollection):
 value is `None`. `prepare_<property_name>(source_instance)` takes precedence
 over `attr`; a property must define one of them.
 
+### Computed map coordinates
+
+`Point` accepts numeric source fields or typed collection properties for longitude and latitude.
+Properties use the same `prepare_<name>()` methods and `attr` paths as ordinary collection columns.
+For example, extract map coordinates from a source model's `metadata` JSONField:
+
+```python
+from django.db import models
+from samplesift.django import Point, Property, SampleSiftCollection, registry
+
+from .models import Sample
+
+
+@registry.register
+class SampleCollection(SampleSiftCollection):
+    lat = Property(models.FloatField(null=True))
+    lon = Property(models.FloatField(null=True))
+    geometry = Point(longitude="lon", latitude="lat")
+
+    class Meta:
+        model = Sample
+        api_name = "samples"
+
+    class Query:
+        default_ordering = ["lat", "lon"]
+
+    @staticmethod
+    def prepare_lat(sample):
+        value = (sample.metadata or {}).get("lat")
+        return None if value is None else float(value)
+
+    @staticmethod
+    def prepare_lon(sample):
+        value = (sample.metadata or {}).get("lon")
+        return None if value is None else float(value)
+```
+
+This example expects a JSON object with numeric or null coordinate values.
+Keep computed properties outside `fields`; that list contains actual source-model fields.
+If either coordinate is `None`, the geometry is `None`.
+Zero is a valid coordinate.
+Longitude and latitude properties must declare an integer, float, or decimal field.
+
+`Point(field="location")` also accepts a `Property` with a GeoDjango `PointField` type.
+Its resolver must return a GeoDjango point or `None`.
+SampleSift copies the point before conversion to EPSG:4326.
+
+`attr="metadata__lat"` still does not support dictionary keys.
+Use a preparation method for JSON values.
+
 ## Storage and schema setup
 
 Collection storage uses `SAMPLESIFT_DATABASE_ALIAS`, defaulting to Django's
@@ -186,7 +236,7 @@ Every API collection declares a WGS84 `geometry` and `Query.default_ordering`.
 Its API name defaults to the source model class name converted to lowercase
 kebab case (`AirQualitySample` becomes `air-quality-sample`); set the optional
 unique `Meta.api_name` to override it. `Point` accepts a source GeoDjango point field
-(`Point(field="location")`) or numeric longitude and latitude attributes. The
+(`Point(field="location")`) or numeric longitude and latitude fields or properties. The
 generated table has a spatial GiST index; run `samplesift_sync_schema` after
 adding it.
 
