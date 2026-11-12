@@ -1,0 +1,26 @@
+{% load samplesift %}
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="description"
+              content="Explore OBIS occurrence records with SampleSift.">
+        <title>OBIS occurrences · SampleSift</title>
+        <style>
+            body { margin: 30px auto; padding: 0 20px; max-width: 1200px; font: 14px system-ui, sans-serif; background: #f3f5ef; color: #234031; }
+            h1 { font-size: 24px; font-weight: 550; }
+            p { color: #78866d; }
+            sample-sift { margin-top: 24px; }
+        </style>
+    </head>
+    <body>
+        <h1>OBIS occurrences</h1>
+        <p>
+            Records from an
+            <a href="https://obis.org/dataset/ad65221f-0539-44aa-925e-4acf62ad0c6a">OBIS dataset</a>,
+            served by SampleSift.
+        </p>
+        {% samplesift "occurrences" page_size=25 %}
+    </body>
+</html>

@@ -41,3 +41,9 @@ dev = [
 testpaths = ["tests"]
 pythonpath = ["."]
 DJANGO_SETTINGS_MODULE = "tests.settings"
+
+[tool.djlint]
+profile = "django"
+indent = 4
+max_line_length = 120
+format_attribute_template_tags = true

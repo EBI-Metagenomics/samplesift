@@ -3,7 +3,11 @@
 import os
 
 SECRET_KEY = "samplesift-tests"
-INSTALLED_APPS = ["samplesift.django.apps.SamplesiftDjangoConfig", "django.contrib.postgres"]
+INSTALLED_APPS = [
+    "samplesift.django.apps.SamplesiftDjangoConfig",
+    "django.contrib.postgres",
+    "django.contrib.staticfiles",
+]
 GDAL_LIBRARY_PATH = os.environ.get("GDAL_LIBRARY_PATH")
 GEOS_LIBRARY_PATH = os.environ.get("GEOS_LIBRARY_PATH")
 _database = {
@@ -19,3 +23,5 @@ DATABASES = {
     "samplesift": {**_database, "TEST": {"NAME": f"test_{_database['NAME']}_samplesift"}},
 }
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+STATIC_URL = "/static/"
+TEMPLATES = [{"BACKEND": "django.template.backends.django.DjangoTemplates", "APP_DIRS": True}]

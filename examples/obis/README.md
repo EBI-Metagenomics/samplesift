@@ -14,7 +14,12 @@ docker compose up --build
 ```
 
 Initial setup may take several minutes. Once the logs say `Reconciled 9900 OBIS
-occurrences`, query the API at `http://127.0.0.1:8001/samplesift/`:
+occurrences`, open the explorer at `http://127.0.0.1:8001/`. The page embeds it with
+the `samplesift` template tag (see
+[occurrences/index.html](occurrences/templates/occurrences/index.html)).
+
+The explorer uses the API at `http://127.0.0.1:8001/samplesift/`, which you can also
+query directly:
 
 ```sh
 curl http://127.0.0.1:8001/samplesift/collections/occurrences/queryables
