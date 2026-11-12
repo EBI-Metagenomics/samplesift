@@ -96,3 +96,13 @@ tasks:
       - task: frontend:lint
       - task: frontend:typecheck
       - task: frontend:test
+
+  hooks:install:
+    desc: Install the Git pre-commit hook
+    cmds:
+      - uv run --locked pre-commit install
+
+  lint:
+    desc: Run all pinned pre-commit checks
+    cmds:
+      - uv run --locked pre-commit run --all-files {{.CLI_ARGS}}
