@@ -208,15 +208,49 @@ For normal Django ORM writes on the configured source alias:
 The callback logs collection/source context and re-raises failures. A failed
 collection write does not roll back the already committed source transaction.
 
-This first version deliberately does not support:
+Current limits:
 
-- `QuerySet.update()`, raw SQL, imports, or external writers;
-- queued/retried delivery, source versions, rebuilds, or reconciliation;
-- refreshing root collections when a related object changes;
-- facets.
+- `QuerySet.update()`, raw SQL, and external imports do not trigger automatic synchronisation.
+- Synchronisation has no queued delivery, retries, or source-version checks.
+- Related-object changes do not trigger automatic collection updates.
+- API facets are not supported.
 
 When extending the feature, keep the target database disposable and derived;
 do not add source-of-truth business state to collection tables.
+
+### Refreshing collection content
+
+Refresh every registered collection from its source records:
+
+```shell
+python manage.py samplesift_sync_content
+```
+
+Refresh one collection by its `Meta.api_name`, or its default API name:
+
+```shell
+python manage.py samplesift_sync_content samples
+```
+
+The command also supports collections without a spatial API.
+Collection names must be unique when selecting one collection.
+
+The command recomputes fields, prepared properties, and geometry for every source record.
+It creates missing collection rows, updates existing rows, and removes orphaned collection rows.
+It does not save source objects or invoke their save signals.
+Use it after bulk imports, raw SQL updates, related-object changes, or resolver changes.
+
+Missing collection tables produce an error before any selected collection is updated.
+Run `python manage.py samplesift_sync_schema` first.
+Content sync does not create or alter tables.
+
+The command reads each collection's configured source database.
+It writes to `SAMPLESIFT_DATABASE_ALIAS`, or `default` when unset.
+It retains source primary keys in memory for orphan detection.
+It does not lock source records or wrap the entire refresh in one transaction.
+If interrupted, rerun the command.
+Collection writes invalidate existing tiles when cache-version triggers are installed.
+Run `samplesift_sync_schema` afterwards if you also want cache prewarming.
 
 ## Verification
 
