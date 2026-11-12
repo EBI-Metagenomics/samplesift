@@ -1,6 +1,6 @@
 # Styling SampleSift
 
-SampleSift keeps its existing appearance when no theme is supplied. All public elements support ordinary CSS custom properties, and selected elements inside their Shadow DOM are exposed as named CSS parts. These hooks work in React, Django templates, and plain HTML without a framework-specific styling adapter.
+SampleSift keeps its existing colours and typography when no theme is supplied. The explorer defaults to compact layout with its table disabled; use `layout="full" show-table` to opt into the expanded view and table. All public elements support ordinary CSS custom properties, and selected elements inside their Shadow DOM are exposed as named CSS parts. These hooks work in React, Django templates, and plain HTML without a framework-specific styling adapter.
 
 Use **variables** to change the overall theme and **parts** for a particular control or layout area. Neither changes filter state, API requests, or the host application's URL.
 
@@ -48,7 +48,8 @@ Every variable has a fallback at its point of use. Defaults intentionally differ
 | `--samplesift-sidebar-width` | Explorer filter sidebar width; the responsive single-column layout still takes over on small screens. |
 | `--samplesift-panel-padding` | Explorer filter panel and map layer panel padding. Accepts ordinary CSS padding values. |
 | `--samplesift-filter-card-padding` | Padding within collection filter cards. |
-| `--samplesift-map-height` | Map height inside an explorer. For a standalone `sample-sift-map`, set the element's CSS `height`. |
+| `--samplesift-compact-height` | Height of the complete compact explorer: 480px by default, with a 360px minimum. Panels scroll inside this space. |
+| `--samplesift-map-height` | Map height inside a full-layout explorer. For a standalone `sample-sift-map`, set the element's CSS `height`. |
 | `--samplesift-shadow` | Collection filter card and legacy explorer shadows. |
 | `--samplesift-color-scheme` | Explorer native-control colour scheme (`light` by default). Set matching surface, text and control colours yourself for a dark theme. |
 | `--samplesift-accent-soft`, `--samplesift-error-border-color` | Legacy sample-mode status dot and validation border colours. |
@@ -63,8 +64,9 @@ Use `sample-sift::part(name)` to style a documented part. The collection and map
 
 | Area | Part names |
 | --- | --- |
+| Compact controls | `compact-toolbar`, `panel-toggle`, `panel-heading`, `panel-close`, `compact-summary` |
 | Collection layout | `explorer`, `filter-panel`, `region-summary`, `results`, `results-heading`, `results-count` |
-| Collection filters | `filter-form`, `filter-heading`, `filter-card`, `filter-label`, `filter-condition`, `filter-remove`, `filter-fields`, `filter-add`, `filter-picker`, `filter-search`, `filter-option`, `filter-actions` |
+| Collection filters | `filter-form`, `filter-heading`, `filter-title`, `filter-card`, `filter-label`, `filter-condition`, `filter-remove`, `filter-fields`, `filter-add`, `filter-picker`, `filter-search`, `filter-option`, `filter-actions` |
 | Filter actions and feedback | `apply-button`, `discard-button`, `clear-button`, `filter-status`, `filter-error` |
 | Applied filters and records | `applied-filters`, `filter-chip`, `feature-details`, `record-link`, `sort-control` |
 | Results table | `table-container`, `results-table`, `table-head`, `table-header-cell`, `table-body`, `table-row`, `table-cell` |
@@ -95,11 +97,13 @@ export function SampleExplorer() {
 }
 ```
 
+The copyable React examples accept `layout` and `showTable` props, defaulting to `'compact'` and `false`. To see the table styling, render `<SampleExplorer showTable />` and open Results; use `<SampleExplorer layout="full" showTable />` for the expanded view. Their JSX omits `show-table` when false rather than rendering the string `"false"`.
+
 The example is plain JSX and assumes a normal browser bundle. In a server-rendered React application, load the package only on the client; importing the custom-element bundle during server rendering is not supported. The component needs no React-specific theme provider. A bundler must retain the package's referenced worker assets.
 
 ### React with the EBI Visual Framework
 
-The [VF React example](examples/styling/react-vf/README.md) includes a copyable [component](examples/styling/react-vf/EbiSampleExplorer.jsx) and [theme stylesheet](examples/styling/react-vf/samplesift-vf.css). It maps the host's Visual Framework 2 colour variables and IBM Plex Sans font to SampleSift, then uses named parts for the Apply button and table. Your React app supplies its usual VF stylesheet and fonts; SampleSift adds no VF dependency.
+The [VF React example](examples/styling/react-vf/README.md) includes a copyable [component](examples/styling/react-vf/EbiSampleExplorer.jsx) and [theme stylesheet](examples/styling/react-vf/samplesift-vf.css). It maps the host's Visual Framework 2 colour variables and IBM Plex Sans font to SampleSift, then uses named parts for the Apply button and table. Your React app supplies its usual VF stylesheet and fonts; SampleSift adds no VF dependency. Pass `showTable` to the example to enable the Results panel and see the table styling, or `layout="full" showTable` to show it inline.
 
 ## Django template example
 
@@ -114,12 +118,14 @@ Copy the **complete** installed package `dist/` tree into your application's `st
 </div>
 ```
 
+The copyable Django template accepts optional `samplesift_layout` (`'compact'` or `'full'`) and boolean `samplesift_show_table` context values. Its defaults remain compact with no table. The `show-table` attribute is emitted only when the context value is true. For a fixed expanded embed, add `layout="full" show-table` directly to the element.
+
 Keep all JavaScript chunks and worker files with their original relative paths. If your static pipeline renames assets, it must also preserve or rewrite their module and worker references; serving the unchanged `dist/` tree is the simplest approach. The Django template supplies HTML; the explorer runs in the browser.
 
 Both examples assume `/samplesift` is routed to a compatible API on the same origin. An absolute API URL also works if the backend allows your page's origin and the `QUERY` method through CORS. The package does not set up that route or change your application's URL state.
 
 ## Local preview and boundaries
 
-Run the frontend development server and open [`/demo/styling.html`](demo/styling.html) to compare the unchanged default and the shared blue theme. Both examples use the configured local collection API.
+Run the frontend development server and open [`/demo/styling.html`](demo/styling.html) to compare the default colours and the shared blue theme. This styling demo explicitly opts into full layout and the table so every styled area is visible. Both examples use the configured local collection API.
 
 CSS changes the surrounding UI. Raster imagery, sample markers, clusters and drawn geometry are rendered by MapLibre and are not styled with these CSS variables. Use the existing `mapLayers`/`mapStyle` configuration for map sources and styles. No new slots or replacement-renderer API is introduced by these styling hooks.

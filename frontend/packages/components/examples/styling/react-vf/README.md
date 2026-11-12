@@ -22,6 +22,14 @@ export default function App() {
 }
 ```
 
+The default is a compact card with Filters closed and no results table. To enable the table styling demonstration, opt in explicitly:
+
+```jsx
+<EbiSampleExplorer showTable />
+```
+
+Open Results to reveal the compact table panel. For the expanded sidebar and inline table, use `<EbiSampleExplorer layout="full" showTable />`. The examples retain `showTable={false}` by default; setting full layout alone does not enable the table. Set `--samplesift-compact-height` on the wrapper to change the compact card's default 480px height (minimum 360px).
+
 This is a plain JSX example for a browser bundle. For a server-rendered React application, load the example only on the client: the SampleSift browser entry cannot be imported during server rendering. Keep the package's worker assets when bundling.
 
 `apiUrl` must reach a compatible SampleSift API. The default assumes the host routes `/samplesift` to that API. A separate API origin requires suitable CORS support, including the `QUERY` method. `tileLayer` is the layer name inside the collection's vector tiles.
