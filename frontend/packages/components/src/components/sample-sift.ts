@@ -14,11 +14,15 @@ import { COLLECTION_PARTS } from './collection-explorer';
 import type { SampleSiftCollection } from './collection-explorer';
 import type { CollectionMetadata, CollectionOptions, CollectionSearchState } from '../collection/types';
 import { createEmptyCollectionState } from '../collection/types';
+import { compactLayoutStyles, focusPanel, restorePanelFocus, reconcilePanelFocus, type ExplorerPanel } from './explorer-layout';
 
 /** Complete browser-native explorer. All public data and events use ordinary objects. */
 export class SampleSift extends LitElement {
   static properties = {
     apiUrl: { type: String, attribute: 'api-url' },
+    layout: { type: String },
+    showTable: { type: Boolean, attribute: 'show-table' },
+    _panel: { state: true },
     collection: { type: String },
     tileLayer: { type: String, attribute: 'tile-layer' },
     collectionOptions: { attribute: false },
@@ -46,6 +50,9 @@ export class SampleSift extends LitElement {
     _activeSample: { state: true },
   };
 
+  layout: 'compact' | 'full' = 'compact';
+  showTable = false;
+  private _panel: ExplorerPanel | null = null;
   apiUrl = '';
   collection = '';
   tileLayer = '';
@@ -90,6 +97,10 @@ export class SampleSift extends LitElement {
   }
 
   protected willUpdate(changed: PropertyValues<this>) {
+    if (changed.has('layout') || changed.has('showTable')) {
+      this._panel = reconcilePanelFocus(this, this._panel, this.layout, this.showTable);
+      if (this._panel) this.renderRoot.querySelector<SampleSiftMap>('sample-sift-map')?.closeLayers();
+    }
     const collectionChanged = changed.has('collectionOptions') || changed.has('collection') || changed.has('tileLayer') || changed.has('apiUrl');
     if (collectionChanged) {
       this._collectionConfig = this.collectionOptions ?? (this.collection ? {
@@ -379,12 +390,45 @@ export class SampleSift extends LitElement {
       </div>`;
   }
 
+  private togglePanel(panel: ExplorerPanel) {
+    if (panel === 'results' && !this.showTable) return;
+    if (this._panel === panel) { this.closePanel(); return; }
+    this.renderRoot.querySelector<SampleSiftMap>('sample-sift-map')?.closeLayers();
+    this._panel = panel;
+    focusPanel(this, panel);
+  }
+
+  private closePanel(restoreFocus = true) {
+    const previous = this._panel;
+    this._panel = null;
+    if (previous && restoreFocus) restorePanelFocus(this, previous);
+  }
+
+  private readonly onPanelKeydown = {
+    capture: true,
+    handleEvent: (event: KeyboardEvent) => {
+      const panel = this._panel;
+      if (event.key !== 'Escape' || !panel) return;
+      // Generated inputs stop bubbling. Wait until child pickers have had a
+      // chance to consume Escape before closing the surrounding panel.
+      setTimeout(() => {
+        if (!event.defaultPrevented && this._panel === panel) this.closePanel();
+      }, 0);
+    },
+  };
+
+  private onLayerPanelChange(event: CustomEvent<{ open: boolean }>) {
+    if (event.detail.open) this.closePanel(false);
+  }
+
   render() {
     if (this._collectionConfig) return html`<sample-sift-collection exportparts=${COLLECTION_PARTS}
+      .layout=${this.layout} .showTable=${this.showTable}
       .options=${this._collectionConfig} .filterMode=${this.filterMode} .filterDebounceMs=${this.filterDebounceMs} .state=${this.collectionState} .paused=${this.collectionPaused}
       .mapStyle=${this.mapStyle} .mapLayers=${this.mapLayers} .mapLayerState=${this.mapLayerState} .pageSize=${this.pageSize}
       @maplayerchange=${this.onMapLayerChange}
       @collectionstatechange=${this.onCollectionState}></sample-sift-collection>`;
+    const compact = this.layout !== 'full';
     const result = this._result;
     const visibleItems = this._loading || this._error || this._filterError ? [] : result?.items ?? [];
     const filters: SampleFilters = { ...EMPTY_FILTERS, ...this.filters, ...this._filterDrafts };
@@ -399,12 +443,29 @@ export class SampleSift extends LitElement {
     const biomeOptions = [...new Set([...this._biomes, ...(filters.biome ? [filters.biome] : [])])];
     const selectedVertices = Math.max(0, (this.selection?.coordinates[0]?.length ?? 1) - 1);
     const isDemo = this.demo && !this.dataSource && !this.apiUrl.trim();
+    const applied = { ...EMPTY_FILTERS, ...this.filters };
+    const activeFilters = [
+      applied.n50MinBp !== null || applied.n50MaxBp !== null ? 'N50' : '',
+      applied.taxonId ? `Taxonomy: ${applied.taxonId}` : '',
+      applied.biome ? `Biome: ${applied.biome}` : '',
+      applied.dateFrom || applied.dateTo ? 'Collection date' : '',
+    ].filter(Boolean);
+    const summary = this._filterError || this._error || (this._loading ? 'Updating samples…' : !this._source ? 'Connect a sample data source to get started.' :
+      `${this.selection ? 'Region selected · ' : ''}${activeFilters.length ? activeFilters.join(' · ') : 'All samples'} · ${visibleItems.length} shown on this page`);
+    const countLabel = this._filterError ? 'Check filters' : this._loading ? 'Searching…' : this._error ? 'Search unavailable' : !this._source ? 'No data source' : `${total.toLocaleString()} ${total === 1 ? 'sample' : 'samples'}`;
     return html`
-      <div part="explorer" class="explorer">
-        <aside part="filter-panel" class="filters" aria-label="Sample filters">
-          <div class="section-kicker">YOUR SEARCH</div>
+      <div part="explorer" class=${compact ? 'explorer compact' : 'explorer'} @keydown=${this.onPanelKeydown}>
+        <div class="compact-toolbar" part="compact-toolbar" ?hidden=${!compact}>
+          <button type="button" part="panel-toggle" data-panel-toggle="filters" aria-label="Filters" aria-controls="legacy-filters" aria-expanded=${this._panel === 'filters'} @click=${() => this.togglePanel('filters')}>Filters<span class="badge">${activeFilters.length || nothing}</span></button>
+          ${this.showTable ? html`<button type="button" part="panel-toggle" data-panel-toggle="results" aria-label="Results" aria-controls="legacy-results" aria-expanded=${this._panel === 'results'} @click=${() => this.togglePanel('results')}>Results</button>` : nothing}
+          ${Object.keys(this._filterDrafts).length ? html`<span class="draft-indicator">Unsaved edits</span>` : nothing}
+          <span class="count" part="results-count" data-testid=${compact ? 'match-count' : nothing} aria-live="polite">${countLabel}</span>
+        </div>
+        <aside id="legacy-filters" part="filter-panel" class="filters" data-panel="filters" tabindex="-1" aria-label="Sample filters" ?hidden=${compact && this._panel !== 'filters'}>
+          <div class="panel-heading" part="panel-heading" ?hidden=${!compact}><h2 data-panel-heading tabindex="-1">Filters</h2><button type="button" part="panel-close" aria-label="Close filters" @click=${() => this.closePanel()}>Close</button></div>
+          <div class="filter-content"><div class="filter-intro"><div class="section-kicker">YOUR SEARCH</div>
           <h2>Find your samples.</h2>
-          <p class="intro">Draw a region on the map, then narrow it down.</p>
+          <p class="intro">Draw a region on the map, then narrow it down.</p></div>
           <div part="region-summary" class="region-card">
             <span class="region-icon" aria-hidden="true">⌖</span>
             <div><strong>${this.selection ? 'Region selected' : 'All locations'}</strong><span>${this.selection ? `${selectedVertices} vertices · boundaries included` : 'Use Rectangle or Polygon to select.'}</span></div>
@@ -414,7 +475,7 @@ export class SampleSift extends LitElement {
           ${activeHidden.length ? html`<p class="field-note hidden-filters">Active filters without visible controls: ${activeHidden.join(', ')}. Clear filters removes them too.</p>` : nothing}
           ${filterFields.map(field => this.renderFilter(field, filters, biomeOptions))}
           <button part="clear-button" class="reset" @click=${() => this.clearUserFilters()}>Clear filters</button>
-          <div class="filter-footer"><span class="status-dot"></span>${isDemo ? 'Synthetic demonstration data' : this._source ? 'Connected collection' : 'Ready to connect'}<p>${isDemo ? 'These records are fictional. Connect the MGnify-backed API to explore real samples.' : 'The map previews the current results page. Counts cover the complete search.'}</p></div>
+          <div class="filter-footer"><span class="status-dot"></span>${isDemo ? 'Synthetic demonstration data' : this._source ? 'Connected collection' : 'Ready to connect'}<p>${isDemo ? 'These records are fictional. Connect the MGnify-backed API to explore real samples.' : 'The map previews the current results page. Counts cover the complete search.'}</p></div></div>
         </aside>
         <main>
           <section class="map-section" aria-label="Spatial selection">
@@ -425,24 +486,30 @@ export class SampleSift extends LitElement {
               .mapLayers=${this.mapLayers}
               .mapLayerState=${this.mapLayerState}
               @maplayerchange=${this.onMapLayerChange}
+              @layerpanelchange=${this.onLayerPanelChange}
               @selectionchange=${this.onSelection}
               @sampleclick=${this.onMapSample}
             ></sample-sift-map>
             <div class="map-caption"><span class="point-key"></span>${this._loading ? 'Updating map preview…' : `${visibleItems.length} samples shown · current page only`}<span class="map-hint">Panning keeps your selection.</span></div>
           </section>
-          <section part="results" class="results" aria-label="Matching samples" aria-busy=${this._loading}>
+          <section id="legacy-results" part="results" class="results" data-panel="results" tabindex="-1" aria-label="Matching samples" aria-busy=${this._loading} ?hidden=${compact && (!this.showTable || this._panel !== 'results')}>
+            <div class="panel-heading" part="panel-heading" ?hidden=${!compact}><h2 data-panel-heading tabindex="-1">Results</h2><button type="button" part="panel-close" aria-label="Close results" @click=${() => this.closePanel()}>Close</button></div>
             <div part="results-heading" class="results-heading">
-              <div><span class="section-kicker">MATCHING SAMPLES</span><h3 part="results-count" data-testid="match-count" aria-live="polite">${this._filterError ? 'Check filters' : this._loading ? 'Searching…' : this._error ? 'Search unavailable' : !this._source ? 'No data source' : html`${total.toLocaleString()} <span>${total === 1 ? 'sample' : 'samples'}</span>`}</h3></div>
+              <div><span class="section-kicker">MATCHING SAMPLES</span><h3 part="results-count" data-testid=${!compact ? 'match-count' : nothing} aria-live="polite">${this._filterError ? 'Check filters' : this._loading ? 'Searching…' : this._error ? 'Search unavailable' : !this._source ? 'No data source' : html`${total.toLocaleString()} <span>${total === 1 ? 'sample' : 'samples'}</span>`}</h3></div>
               <div class="facets">${!this._loading && !this._error && !this._filterError ? result?.facets.biomes.map(facet => html`<span>${facet.value}<b>${facet.count.toLocaleString()}</b></span>`) : nothing}</div>
             </div>
-            ${this.renderResults()}
-            <div part="pagination" class="pagination"><span>${this._loading ? 'Loading results' : visibleItems.length ? `${this._offset + 1}–${this._offset + visibleItems.length} of ${total.toLocaleString()}` : 'No rows to display'}</span><div><button part="page-button" aria-label="Previous page" ?disabled=${this._loading || !!this._filterError || !this._offset} @click=${() => this.changePage(-1)}>← Previous</button><button part="page-button" aria-label="Next page" ?disabled=${this._loading || !!this._filterError || !result || this._offset + this.pageSize >= total} @click=${() => this.changePage(1)}>Next →</button></div></div>
+            ${this.showTable ? this.renderResults() : nothing}
+            <div part="pagination" class="pagination" ?hidden=${!this.showTable}><span>${this._loading ? 'Loading results' : visibleItems.length ? `${this._offset + 1}–${this._offset + visibleItems.length} of ${total.toLocaleString()}` : 'No rows to display'}</span><div><button part="page-button" aria-label="Previous page" ?disabled=${this._loading || !!this._filterError || !this._offset} @click=${() => this.changePage(-1)}>← Previous</button><button part="page-button" aria-label="Next page" ?disabled=${this._loading || !!this._filterError || !result || this._offset + this.pageSize >= total} @click=${() => this.changePage(1)}>Next →</button></div></div>
           </section>
         </main>
+        <div class="compact-summary" part="compact-summary" ?hidden=${!compact && this.showTable}>
+          <span class=${this._error || this._filterError ? 'summary-message summary-error' : 'summary-message'} title=${summary} role=${this._error || this._filterError ? 'alert' : 'status'}>${summary}</span>
+          ${this._error ? html`<button type="button" @click=${() => this.refresh()}>Retry</button>` : this._filterError ? html`<button type="button" @click=${() => this.togglePanel('filters')}>Review filters</button>` : nothing}
+        </div>
       </div>`;
   }
 
-  static styles = css`
+  static styles = [css`
     :host{display:block;color:var(--samplesift-text, #233c34);font-family:var(--samplesift-font, Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif);font-size:var(--samplesift-font-size, 13px);line-height:var(--samplesift-line-height, 1.5);color-scheme:var(--samplesift-color-scheme, light)}
     *{box-sizing:border-box}button,input,select{font:inherit}button,a,input,select{outline-offset:3px}button{cursor:pointer}button:disabled{cursor:default;opacity:.38}button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--samplesift-focus-color, var(--samplesift-accent, #16674f))}
     .explorer{display:grid;grid-template-columns:var(--samplesift-sidebar-width, 258px) minmax(0,1fr);border:1px solid var(--samplesift-border-color, #dbe2da);border-radius:var(--samplesift-radius, 14px);overflow:hidden;background:var(--samplesift-surface, #fff);box-shadow:var(--samplesift-shadow, 0 8px 32px #173c2506)}
@@ -457,7 +524,7 @@ export class SampleSift extends LitElement {
     table{min-width:640px}.sample-link{white-space:nowrap}td:first-child{min-width:180px}
     .empty{min-height:170px;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:8px;text-align:center;padding:30px;color:var(--samplesift-muted, #7e8d75);font-size:12px;border-top:1px solid var(--samplesift-border-color, #edf1e7)}.empty strong{font-weight:550;font-size:15px;color:var(--samplesift-text, #415b3a)}.empty>span{max-width:400px}.empty button{padding:6px 12px;border:1px solid var(--samplesift-border-color, #d0dac8);background:var(--samplesift-control-background, var(--samplesift-surface, white));border-radius:var(--samplesift-control-radius, 4px);color:var(--samplesift-accent, #45623b)}.error{background:var(--samplesift-error-background, #fffaf5)}.error strong{color:var(--samplesift-error-color, #965b34)}.spinner{display:block;width:18px;height:18px;border:2px solid var(--samplesift-border-color, #e0e8d8);border-top-color:var(--samplesift-accent, #16674f);border-radius:50%;animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.spinner{animation:none}}
     @media(max-width:760px){.explorer{grid-template-columns:1fr}.filters{border-right:0;border-bottom:1px solid var(--samplesift-border-color, #e2e7df);padding:var(--samplesift-panel-padding, 20px);display:grid;grid-template-columns:1fr 1fr;column-gap:16px}.filters>.section-kicker,.filters>h2,.filters>.intro,.region-card,.filter-footer,.field-note,.reset{grid-column:1/-1}.filters>.intro{max-width:none;margin-bottom:15px}.region-card{margin-bottom:0}.filters label{grid-column:1;align-self:center;margin:10px 0}.filters input,.filters select{grid-column:2;margin-top:8px}.filter-footer{margin-top:15px}.filter-footer p{margin-bottom:0}sample-sift-map{height:var(--samplesift-map-height, 350px)}.results-heading{padding:18px 15px}.map-hint{display:none}.facets{max-width:50%}td,th{padding-left:14px;padding-right:14px}}
-  `;
+  `, compactLayoutStyles];
 }
 
 if (!customElements.get('sample-sift')) customElements.define('sample-sift', SampleSift);
