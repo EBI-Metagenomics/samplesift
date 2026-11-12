@@ -115,7 +115,7 @@ test('standalone collection, map and filter form expose the same theme hooks', a
     const form = document.createElement('sample-sift-collection-filter-form') as SampleSiftCollectionFilterForm;
     form.id = 'form-only'; form.metadata = element.collectionMetadata;
     const collection = document.createElement('sample-sift-collection') as SampleSiftCollection;
-    collection.id = 'collection-only'; collection.options = { baseUrl: '/samplesift', collection: 'occurrences' };
+    collection.id = 'collection-only'; collection.layout = 'full'; collection.showTable = true; collection.options = { baseUrl: '/samplesift', collection: 'occurrences' };
     collection.mapStyle = { version: 8, sources: {}, layers: [] };
     parent.append(map, form, collection); document.body.append(parent);
   });

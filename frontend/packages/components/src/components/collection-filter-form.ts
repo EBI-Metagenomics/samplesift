@@ -27,7 +27,7 @@ interface FilterCard {
 let formSequence = 0;
 
 /** Styling hooks forwarded by the collection explorer and its public wrapper. */
-export const FILTER_PARTS = 'filter-form, filter-heading, filter-card, filter-label, filter-condition, filter-remove, filter-fields, filter-add, filter-picker, filter-search, filter-option, filter-actions, apply-button, discard-button, clear-button, filter-status, filter-error';
+export const FILTER_PARTS = 'filter-form, filter-heading, filter-title, filter-card, filter-label, filter-condition, filter-remove, filter-fields, filter-add, filter-picker, filter-search, filter-option, filter-actions, apply-button, discard-button, clear-button, filter-status, filter-error';
 
 /** Metadata-derived cards keep drafts local until an explicit Apply (or host-opted-in auto apply). */
 export class SampleSiftCollectionFilterForm extends LitElement {
@@ -396,7 +396,7 @@ export class SampleSiftCollectionFilterForm extends LitElement {
     const search = this._search.trim().toLocaleLowerCase();
     const matches = available.filter(field => `${fieldLabel(field)} ${field.name} ${field.description ?? ''}`.toLocaleLowerCase().includes(search));
     return html`<section part="filter-form" aria-label="Collection filters">
-      <div class="heading" part="filter-heading"><h3>Filters${this._active.length ? html`<span class="count">${this._active.length}</span>` : nothing}</h3>
+      <div class="heading" part="filter-heading"><h3 part="filter-title">Filters${this._active.length ? html`<span class="count">${this._active.length}</span>` : nothing}</h3>
         ${this._active.length || this._applied.length || this._unavailable ? html`<button class="link" part="clear-button" type="button" @click=${this.clearFilters} ?disabled=${this.disabled}>Clear filters</button>` : nothing}</div>
       ${this._error ? html`<p class="error" part="filter-error" role="alert">${this._error}</p>` : nothing}
       ${!this.metadata ? html`<p class="hint" part="filter-status" role="status">Loading available filters…</p>` : nothing}
@@ -409,7 +409,7 @@ export class SampleSiftCollectionFilterForm extends LitElement {
         <input part="filter-search" type="search" aria-label="Search filters" placeholder="Find a field…" .value=${this._search}
           @input=${(event: Event) => { this._search = (event.target as HTMLInputElement).value; }}
           @keydown=${(event: KeyboardEvent) => {
-            if (event.key === 'Escape') { this._picker = false; this.renderRoot.querySelector<HTMLButtonElement>('.add')?.focus(); }
+            if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); this._picker = false; this.renderRoot.querySelector<HTMLButtonElement>('.add')?.focus(); }
             if (event.key === 'Enter' && matches.length === 1) { event.preventDefault(); this.addField(matches[0].name); }
           }}>
         <ul>${matches.map(field => html`<li><button part="filter-option" type="button" aria-label=${`Add ${fieldLabel(field)} filter`} @click=${() => this.addField(field.name)}><strong>${fieldLabel(field)}</strong>${field.description ? html`<small>${field.description}</small>` : nothing}</button></li>`)}</ul>

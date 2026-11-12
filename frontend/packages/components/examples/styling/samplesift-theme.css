@@ -16,7 +16,8 @@
   --samplesift-radius: 12px;
   --samplesift-control-radius: 6px;
   --samplesift-filter-card-padding: 14px;
-  --samplesift-map-height: 420px;
+  --samplesift-compact-height: 480px;
+  --samplesift-map-height: 420px; /* Full-layout map height. */
 }
 
 /* Parts allow selected layout/details to differ from the default design. */

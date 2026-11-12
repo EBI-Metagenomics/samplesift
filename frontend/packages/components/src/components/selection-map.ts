@@ -151,8 +151,8 @@ export class SampleSiftMap extends LitElement {
     .maplibregl-ctrl-group button:focus:only-child { border-radius: inherit; }
     .maplibregl-ctrl-top-right { top: 6px; right: 6px; }
     .maplibregl-ctrl-attrib { font-size: 10px; }
-    @media (max-width: 520px) {
-      :host { min-height: 320px; }
+    @media (max-width: 520px) { :host { min-height: 320px; } }
+    @container (max-width: 520px) {
       .toolbar { top: 10px; left: 10px; gap: 1px; }
       button { padding: 7px; }
       .hint { left: 10px; max-width: calc(100% - 20px); font-size: 11px; }
@@ -657,9 +657,32 @@ export class SampleSiftMap extends LitElement {
     this._managedLayers?.update(this._layerCatalog, this._layerState);
   }
 
-  private _closeLayers(): void {
+  /** Close the layer panel without changing its selection or emitting user intent. */
+  closeLayers(restoreFocus = false): void {
+    if (!this._layersOpen) return;
     this._layersOpen = false;
-    void this.updateComplete.then(() => this.renderRoot.querySelector<HTMLButtonElement>('.layers-toggle')?.focus());
+    if (restoreFocus) void this.updateComplete.then(() => {
+      if (!this._layersOpen) this.renderRoot.querySelector<HTMLButtonElement>('.layers-toggle')?.focus({ preventScroll: true });
+    });
+  }
+
+  private _closeLayers(): void {
+    if (!this._layersOpen) return;
+    this.closeLayers(true);
+    this.dispatchEvent(new CustomEvent('layerpanelchange', {
+      detail: { open: false }, bubbles: true, composed: true,
+    }));
+  }
+
+  private _toggleLayers(): void {
+    if (this._layersOpen) { this._closeLayers(); return; }
+    this._layersOpen = true;
+    this.dispatchEvent(new CustomEvent('layerpanelchange', {
+      detail: { open: true }, bubbles: true, composed: true,
+    }));
+    void this.updateComplete.then(() => {
+      if (this._layersOpen) this.renderRoot.querySelector<HTMLElement>('.layers-panel')?.focus({ preventScroll: true });
+    });
   }
 
   private _renderProviderStatus(layer: RasterMapLayer) {
@@ -680,14 +703,14 @@ export class SampleSiftMap extends LitElement {
       @click=${(event: Event) => event.stopPropagation()} @dblclick=${(event: Event) => event.stopPropagation()}
       @wheel=${(event: Event) => event.stopPropagation()}
       @keydown=${(event: KeyboardEvent) => { event.stopPropagation(); if (event.key === 'Escape') { event.preventDefault(); this._closeLayers(); } }}>
-      ${hasLayers ? html`<button part="map-button map-layer-toggle" type="button" class="layers-toggle" aria-label="Layers" aria-expanded=${this._layersOpen}
-        @click=${() => { this._layersOpen = !this._layersOpen; }}>
+      ${hasLayers ? html`<button part="map-button map-layer-toggle" type="button" class="layers-toggle" aria-label="Layers" aria-controls="map-layer-panel" aria-expanded=${this._layersOpen}
+        @click=${this._toggleLayers}>
         <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m2 6 8-4 8 4-8 4-8-4Zm0 4 8 4 8-4M2 14l8 4 8-4"/></svg>
         Layers${errors.length ? html`<span class="layer-warning" aria-label="Some map layers failed">!</span>` : nothing}
       </button>` : nothing}
       ${this._layerConfigError ? html`<p class="layers-notice" part="map-status" role="alert">${this._layerConfigError}</p>` : nothing}
       ${!this._layersOpen && errors.length ? html`<p class="layers-notice" part="map-status" role="status">${errors.map(status => status.label).join(', ')} could not load. Open Layers to retry.</p>` : nothing}
-      ${this._layersOpen && catalog && state ? html`<section class="layers-panel" part="map-layers-panel" aria-label="Map layers">
+      ${this._layersOpen && catalog && state ? html`<section id="map-layer-panel" class="layers-panel" part="map-layers-panel" aria-label="Map layers" tabindex="-1">
         <div class="layers-heading"><h3>Map layers</h3><button part="map-button" type="button" class="layers-close" aria-label="Close map layers" @click=${this._closeLayers}>×</button></div>
         ${catalog.basemaps.length ? html`<fieldset><legend>Basemap</legend>
           ${catalog.basemaps.map(layer => html`<label class="layer-choice" part="map-layer-option"><input type="radio" name="samplesift-basemap" .value=${layer.id}

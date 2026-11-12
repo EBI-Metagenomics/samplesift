@@ -11,6 +11,8 @@ The main public element supports a concise collection configuration:
 <sample-sift api-url="/samplesift" collection="occurrences" tile-layer="occurrences" page-size="25"></sample-sift>
 ```
 
+Compact mode is the default and the table is disabled until the host opts in. Set `show-table` for a collapsed Results panel, or `layout="full" show-table` for the previous expanded layout. See [layout configuration](README.md#compact-and-full-layouts).
+
 For object configuration, assign `collectionOptions`; it takes precedence over the collection attributes. The wrapper and direct element use these corresponding properties and methods:
 
 | `<sample-sift>` collection mode | Direct `<sample-sift-collection>` |
@@ -24,6 +26,8 @@ For object configuration, assign `collectionOptions`; it takes precedence over t
 | `filterDebounceMs` (default `500`) | `filterDebounceMs` |
 | `mapLayers` | `mapLayers` |
 | `mapLayerState` | `mapLayerState` |
+| `layout` (default `'compact'`) | `layout` |
+| `showTable` (default `false`, attribute `show-table`) | `showTable` |
 
 Both expose the collection events below. The remaining code examples use the **direct element**. Import the package and assign `options` as a JavaScript property. `baseUrl` is the **API root**, including `/samplesift`; `collection` is an identifier beneath that root.
 
@@ -43,7 +47,9 @@ explorer.options = {
 explorer.pageSize = 25;
 ```
 
-Omit `tiles` for a table/filter integration without a collection tile layer. `sourceLayer` names the layer **inside the MVT**, which need not equal the collection identifier. The inspected `occurrences` backend uses `occurrences`; other services must configure their own layer name. `mapStyle` accepts a MapLibre style URL or object, as on the existing map component.
+For a table/filter integration without a collection tile layer, omit `tiles` and opt into the table with `showTable = true`. `sourceLayer` names the layer **inside the MVT**, which need not equal the collection identifier. The inspected `occurrences` backend uses `occurrences`; other services must configure their own layer name. `mapStyle` accepts a MapLibre style URL or object, as on the existing map component.
+
+The component requests the following endpoints even when `showTable` is false. The results response supplies counts and search state; no count-only endpoint is assumed. Toggling panels does not start a new search.
 
 The component requests:
 
@@ -64,7 +70,7 @@ The **Add filter** picker searches available fields. Each selected field has a c
 
 By default, filters remain drafts until **Apply filters** validates and commits them. **Discard changes** restores the applied filters; **Clear filters** explicitly commits an empty predicate list while retaining the selected region. Invalid or incomplete drafts never issue a broader search. Applied filter chips summarize the current query and let users edit or remove a field. Map selection, sorting and pagination continue to operate on the applied predicates without erasing a draft.
 
-The map and table stay visible while a new search loads. A failed result request retains the previous table with a clear error and retry action. Empty results offer ways to remove filters or clear the region.
+The map and any open table remain mounted while a new search loads. A failed result request retains the previous results with clear error and retry feedback, including when the table is disabled or closed. Empty results offer ways to remove filters or clear the region.
 
 Hosts that explicitly prefer automatic updates can set `filterMode = 'auto'` (or `filter-mode="auto"`) and optionally `filterDebounceMs` (or `filter-debounce-ms`). Valid edits then commit after that many milliseconds; manual mode is the default on both public elements. Drafts never emit `collectionstatechange` or change host URL state.
 

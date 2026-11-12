@@ -1,8 +1,8 @@
 <!doctype html>
 <html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>SampleSift · Independent embeds</title><style>body{font:14px system-ui;margin:24px;background:#f3f5ef;color:#234031}sample-sift{margin:24px 0}h1{font-size:24px}a{color:#16674f}</style></head><body>
 <a href="/">← Back to demo</a><h1>Two independent instances</h1><p>Each component has its own filters, map and requests. These maps use an empty background so this page needs no external basemap service.</p>
-<sample-sift id="first" demo page-size="10"></sample-sift>
-<sample-sift id="second" demo page-size="10"></sample-sift>
+<sample-sift layout="full" show-table id="first" demo page-size="10"></sample-sift>
+<sample-sift layout="full" show-table id="second" demo page-size="10"></sample-sift>
 <script type="module">
   import '../src/index.ts';
   for (const explorer of document.querySelectorAll('sample-sift')) {

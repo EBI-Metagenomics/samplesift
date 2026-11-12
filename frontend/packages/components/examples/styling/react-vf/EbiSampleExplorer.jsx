@@ -7,6 +7,8 @@ export function EbiSampleExplorer({
   apiUrl = '/samplesift',
   collection = 'occurrences',
   tileLayer = 'occurrences',
+  layout = 'compact',
+  showTable = false,
 }) {
   return (
     <section className="ebi-samplesift">
@@ -17,6 +19,8 @@ export function EbiSampleExplorer({
         api-url={apiUrl}
         collection={collection}
         tile-layer={tileLayer}
+        layout={layout}
+        show-table={showTable ? '' : undefined}
         page-size="25"
       />
     </section>
