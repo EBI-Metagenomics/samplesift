@@ -40,6 +40,9 @@ jobs:
       - name: Build components
         run: npm run build
 
+      - name: Build Django static components
+        run: npm run build:django
+
       - name: Check package contents
         run: npm run check:package --workspace @samplesift/components
 
