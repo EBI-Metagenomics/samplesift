@@ -82,10 +82,10 @@ Parts are deliberate styling hooks, not access to arbitrary internal selectors. 
 
 ## React example
 
-Copy [SampleExplorer.jsx](examples/styling/react/SampleExplorer.jsx) and [samplesift-theme.css](examples/styling/samplesift-theme.css), preserving their relative import or adjusting it. The example imports the installed `@samplesift/components` package and places the element inside a themed wrapper:
+Copy [SampleExplorer.jsx](examples/styling/react/SampleExplorer.jsx) and [samplesift-theme.css](examples/styling/samplesift-theme.css), preserving their relative import or adjusting it. The example imports the installed `@microbiome-informatics/samplesift` package and places the element inside a themed wrapper:
 
 ```jsx
-import '@samplesift/components';
+import '@microbiome-informatics/samplesift';
 import './samplesift-theme.css';
 
 export function SampleExplorer() {

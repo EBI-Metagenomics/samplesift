@@ -7,7 +7,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { validateNpmRelease } from '../packages/components/scripts/check-npm-release.mjs';
 
-const packageName = '@samplesift/components';
+const packageName = '@microbiome-informatics/samplesift';
 function release(version = '0.1.0') {
   return {
     manifest: { name: packageName, version },
@@ -52,7 +52,7 @@ test('reject both directions of a GitHub prerelease flag mismatch', () => {
 
 test('reject a different or private package', () => {
   for (const manifest of [{ name: 'samplesift', version: '0.1.0' }, { ...release().manifest, private: true }]) {
-    assert.throws(() => validateNpmRelease({ ...release(), manifest }), /public @samplesift\/components/);
+    assert.throws(() => validateNpmRelease({ ...release(), manifest }), /public @microbiome-informatics\/samplesift/);
   }
 });
 

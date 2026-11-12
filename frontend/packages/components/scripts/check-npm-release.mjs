@@ -2,7 +2,7 @@ import { appendFile, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const PACKAGE_NAME = '@samplesift/components';
+const PACKAGE_NAME = '@microbiome-informatics/samplesift';
 // npm releases use SemVer without build metadata, which npm can normalize away.
 const RELEASE_VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
 

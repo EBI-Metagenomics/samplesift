@@ -46,19 +46,19 @@ tasks:
     env:
       SAMPLESIFT_API_TARGET: '{{.SAMPLESIFT_API_TARGET | default "http://127.0.0.1:8002"}}'
     cmds:
-      - npm run dev --workspace @samplesift/components -- {{.CLI_ARGS}}
+      - npm run dev --workspace @microbiome-informatics/samplesift -- {{.CLI_ARGS}}
 
   frontend:build:
     desc: Build the frontend package and TypeScript declarations
     dir: frontend
     cmds:
-      - npm run build --workspace @samplesift/components -- {{.CLI_ARGS}}
+      - npm run build --workspace @microbiome-informatics/samplesift -- {{.CLI_ARGS}}
 
   frontend:preview:
     desc: Serve the built frontend package
     dir: frontend
     cmds:
-      - npm run preview --workspace @samplesift/components -- {{.CLI_ARGS}}
+      - npm run preview --workspace @microbiome-informatics/samplesift -- {{.CLI_ARGS}}
 
   frontend:lint:
     desc: Lint the frontend workspace
@@ -70,25 +70,25 @@ tasks:
     desc: Check frontend TypeScript types
     dir: frontend
     cmds:
-      - npm run typecheck --workspace @samplesift/components -- {{.CLI_ARGS}}
+      - npm run typecheck --workspace @microbiome-informatics/samplesift -- {{.CLI_ARGS}}
 
   frontend:test:
     desc: Run frontend unit tests
     dir: frontend
     cmds:
-      - npm run test --workspace @samplesift/components -- {{.CLI_ARGS}}
+      - npm run test --workspace @microbiome-informatics/samplesift -- {{.CLI_ARGS}}
 
   frontend:browser:setup:
     desc: Install Chromium for Playwright tests
     dir: frontend
     cmds:
-      - npm exec --workspace @samplesift/components -- playwright install chromium {{.CLI_ARGS}}
+      - npm exec --workspace @microbiome-informatics/samplesift -- playwright install chromium {{.CLI_ARGS}}
 
   frontend:test:browser:
     desc: Run Playwright browser tests
     dir: frontend
     cmds:
-      - npm run test:browser --workspace @samplesift/components -- {{.CLI_ARGS}}
+      - npm run test:browser --workspace @microbiome-informatics/samplesift -- {{.CLI_ARGS}}
 
   frontend:check:
     desc: Run frontend lint, TypeScript checks, and unit tests

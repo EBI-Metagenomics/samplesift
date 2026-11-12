@@ -4,7 +4,7 @@ An npm workspace for embeddable Lit components, with versions and release cycles
 
 ## Install in an application
 
-The npm package is `@samplesift/components`. See the
+The npm package is `@microbiome-informatics/samplesift`. See the
 [installation quick starts](packages/components/README.md#install) for connecting
 to an existing collection API or displaying your own points in the standalone
 map. The npm package supplies browser components; installing it does not install

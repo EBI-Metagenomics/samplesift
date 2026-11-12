@@ -25,18 +25,18 @@ and does not need a SampleSift API.
 In an existing application with a JavaScript bundler:
 
 ```sh
-npm install @samplesift/components
+npm install @microbiome-informatics/samplesift
 ```
 
 Use Node.js 22.12 or newer for the package tooling. Import the package from your
 **browser entry point** to register its custom elements:
 
 ```js
-import '@samplesift/components';
+import '@microbiome-informatics/samplesift';
 ```
 
 For server-rendered applications, load this import only on the client. The
-separate `@samplesift/components/data` entry contains helpers that can be imported
+separate `@microbiome-informatics/samplesift/data` entry contains helpers that can be imported
 without a browser DOM. The browser components need WebGL support.
 
 ## Connect to an existing API
@@ -81,7 +81,7 @@ Add the element to your HTML:
 Then run this from the browser entry point after the element exists:
 
 ```js
-import '@samplesift/components';
+import '@microbiome-informatics/samplesift';
 
 const map = document.querySelector('#sample-map');
 map.samples = [{
@@ -175,7 +175,7 @@ Switching these layers keeps the same MapLibre instance, camera, sample layers, 
 The same `mapLayers` and `mapLayerState` JavaScript properties work on `<sample-sift>`, `<sample-sift-collection>` and `<sample-sift-map>`:
 
 ```js
-import { defaultMapLayers, normalizeMapLayerState } from '@samplesift/components/data';
+import { defaultMapLayers, normalizeMapLayerState } from '@microbiome-informatics/samplesift/data';
 
 const explorer = document.querySelector('sample-sift');
 explorer.mapLayers = defaultMapLayers;
@@ -211,7 +211,7 @@ Serve the complete `dist/` directory over HTTP, preserving its relative file lay
 
 The custom elements register on import. Their styles are contained in Shadow DOM; keep the emitted JavaScript chunks and worker assets together. Browser DOM and WebGL support are required; server-side rendering is outside this prototype's scope.
 
-A bundler-based host imports `@samplesift/components` as shown in the installation quick start. For release testing before publication, install the generated `.tgz` archive in the consumer application.
+A bundler-based host imports `@microbiome-informatics/samplesift` as shown in the installation quick start. For release testing before publication, install the generated `.tgz` archive in the consumer application.
 
 For a backend that implements the query transport described below:
 
@@ -226,8 +226,8 @@ In legacy mode, without `demo`, `api-url`, or a `dataSource` property, the compo
 Assign arrays and objects as JavaScript properties:
 
 ```js
-import '@samplesift/components';
-import { EMPTY_FILTERS, normalizeFilters } from '@samplesift/components/data';
+import '@microbiome-informatics/samplesift';
+import { EMPTY_FILTERS, normalizeFilters } from '@microbiome-informatics/samplesift/data';
 
 await customElements.whenDefined('sample-sift');
 const explorer = document.querySelector('sample-sift');
@@ -288,10 +288,10 @@ Spatial, biome, and collection-date filters are ANDed with assembly constraints.
 
 ## Data adapters and HTTP transport
 
-The `@samplesift/components/data` entry exports adapters, validation/filter helpers, URL helpers, `EMPTY_FILTERS`, and public data types without importing the map component:
+The `@microbiome-informatics/samplesift/data` entry exports adapters, validation/filter helpers, URL helpers, `EMPTY_FILTERS`, and public data types without importing the map component:
 
 ```js
-import { createFixtureDataSource, createHttpDataSource } from '@samplesift/components/data';
+import { createFixtureDataSource, createHttpDataSource } from '@microbiome-informatics/samplesift/data';
 
 // A caller-provided collection of normalized Sample records.
 explorer.dataSource = createFixtureDataSource(samples);
@@ -370,11 +370,11 @@ The host must apply each patch to its **latest** URL/router state, preserve exis
 ```
 
 ```js
-import '@samplesift/components';
+import '@microbiome-informatics/samplesift';
 import {
   createHttpDataSource, readFilterQuery,
   createFilterQueryPatch, applyFilterQueryPatch,
-} from '@samplesift/components/data';
+} from '@microbiome-informatics/samplesift/data';
 
 const namespace = 'left';
 const slot = document.querySelector('#explorer-slot');

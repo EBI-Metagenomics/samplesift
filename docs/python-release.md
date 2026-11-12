@@ -12,13 +12,17 @@ repository or its secrets.
 | Distribution | Version source | GitHub release tag |
 | --- | --- | --- |
 | Python `samplesift` | `pyproject.toml`, with `uv.lock` updated | `vX.Y.Z` |
-| npm `@samplesift/components` | `frontend/packages/components/package.json`, matching `frontend/package-lock.json` | `npm-vX.Y.Z` |
+| npm `@microbiome-informatics/samplesift` | `frontend/packages/components/package.json`, matching `frontend/package-lock.json` | `npm-vX.Y.Z` |
 
 The versions do not need to match. Every job in each publisher checks its tag
 prefix, so an npm release skips the Python pipeline and a Python release skips
 the npm pipeline. Bare version tags do not publish either package. A matching
 prefix with the wrong package version fails validation before tests or builds.
 See [the npm release guide](frontend-release.md) for npm prereleases and channels.
+
+The npm scope is `microbiome-informatics`; the GitHub repository remains
+`EBI-Metagenomics/samplesift`. Use `EBI-Metagenomics` as the GitHub owner in
+trusted publisher settings for both registries.
 
 The Python distribution includes the Django API and browser assets for its Django
 integration. These assets are built from the frontend source in the Python

@@ -72,8 +72,8 @@ jobs:
           mkdir -p "$RUNNER_TEMP/npm-release"
           npm pack --pack-destination "$RUNNER_TEMP/npm-release"
           cd "$RUNNER_TEMP/npm-release"
-          mv "samplesift-components-$RELEASE_VERSION.tgz" samplesift-components.tgz
-          sha256sum samplesift-components.tgz > SHA256SUMS
+          mv "microbiome-informatics-samplesift-$RELEASE_VERSION.tgz" samplesift.tgz
+          sha256sum samplesift.tgz > SHA256SUMS
 
       - name: Upload the checked archive
         uses: actions/upload-artifact@v7
@@ -90,7 +90,7 @@ jobs:
     runs-on: ubuntu-24.04
     environment:
       name: npm
-      url: https://www.npmjs.com/package/@samplesift/components
+      url: https://www.npmjs.com/package/@microbiome-informatics/samplesift
     permissions:
       contents: read
       id-token: write
@@ -120,5 +120,5 @@ jobs:
         env:
           NPM_DIST_TAG: ${{ needs.validate-release.outputs.dist-tag }}
         run: >-
-          npm publish ./samplesift-components.tgz --ignore-scripts
+          npm publish ./samplesift.tgz --ignore-scripts
           --access public --registry=https://registry.npmjs.org --tag "$NPM_DIST_TAG"
