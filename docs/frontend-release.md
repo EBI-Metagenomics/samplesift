@@ -26,6 +26,9 @@ npm run check:package --workspace @samplesift/components
 
 Omit `PLAYWRIGHT_CHANNEL=chrome` if Playwright's Chromium is installed.
 
+`.github/workflows/test-frontend.yml` runs these checks in CI except lint, which
+runs in `lint.yml`, and the browser tests, which run only locally.
+
 Create a local archive from `frontend/packages/components/`:
 
 ```sh

@@ -2577,7 +2577,7 @@ dev = [
 requires-dist = [
     { name = "anywidget", marker = "extra == 'jupyter'", specifier = ">=0.11,<0.12" },
     { name = "traitlets", marker = "extra == 'jupyter'", specifier = ">=5.14,<6" },
-    { name = "django", marker = "extra == 'django'", specifier = ">=6.0,<6.1" },
+    { name = "django", marker = "extra == 'django'", specifier = ">=5.0,<7" },
     { name = "django-ninja", marker = "extra == 'django'", specifier = ">=1.5,<2" },
     { name = "pygeofilter", marker = "extra == 'django'", specifier = ">=0.3,<0.4" },
 ]
@@ -2591,7 +2591,7 @@ notebook = [
     { name = "jupyterlab", specifier = ">=4,<5" },
 ]
 dev = [
-    { name = "django", specifier = ">=6.0,<6.1" },
+    { name = "django", specifier = ">=5.0,<7" },
     { name = "django-ninja", specifier = ">=1.5,<2" },
     { name = "pre-commit", specifier = ">=4.0,<5" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2,<4" },

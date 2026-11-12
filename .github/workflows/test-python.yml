@@ -1,0 +1,116 @@
+name: Test Python
+
+on:
+  workflow_call:
+  pull_request:
+    paths:
+      - src/**
+      - tests/**
+      - pyproject.toml
+      - uv.lock
+      - .github/workflows/test-python.yml
+  merge_group:
+
+permissions:
+  contents: read
+
+jobs:
+  django:
+    name: django ${{ matrix.django }} (Python ${{ matrix.python }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.14"]
+        django: ["5.2", "6.0"]
+        # Lowest supported Django; it predates Python 3.14 support.
+        include:
+          - python: "3.12"
+            django: "5.0"
+
+    services:
+      postgis:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_DB: samplesift
+          POSTGRES_USER: samplesift
+          POSTGRES_PASSWORD: samplesift
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U samplesift -d samplesift"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Install GDAL and GEOS
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends binutils gdal-bin libgeos-dev libproj-dev
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.3.3
+        with:
+          python-version: ${{ matrix.python }}
+
+      # tests/test_api.py runs tests/tile_preview_check.cjs with Node.
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      # uv.lock pins one Django release; --with overlays the matrix version.
+      - name: Show Django version
+        run: >-
+          uv run --locked --extra django --with "Django==${{ matrix.django }}.*"
+          python -c "import django; print(django.get_version())"
+
+      - name: Run Django and PostGIS tests
+        run: >-
+          uv run --locked --extra django --with "Django==${{ matrix.django }}.*"
+          pytest --ignore=tests/test_jupyter.py --ignore=tests/test_obis_fixture.py
+
+  jupyter:
+    name: jupyter
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.3.3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Test Jupyter wrapper
+        run: |
+          uv run --locked --extra jupyter --group notebook pytest -p no:django tests/test_jupyter.py
+          node --test tests/jupyter-widget.test.mjs
+
+  build:
+    name: build
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.3.3
+
+      - name: Build wheel and source distribution
+        run: uv build
+
+      - name: Import the built wheel
+        run: |
+          uv venv --no-project "$RUNNER_TEMP/wheel-check"
+          VIRTUAL_ENV="$RUNNER_TEMP/wheel-check" uv pip install dist/*.whl
+          "$RUNNER_TEMP/wheel-check/bin/python" -c "import samplesift"

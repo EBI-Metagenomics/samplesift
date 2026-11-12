@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-from copy import copy
 from typing import Any, ClassVar
 
 from django.db import models
@@ -13,6 +12,14 @@ from .constants import WGS84_SRID
 
 class CollectionDefinitionError(ValueError):
     """Raised when a collection declaration cannot be materialised."""
+
+
+def _unkeyed_clone(field: models.Field) -> models.Field:
+    """Clone ``field`` without primary key or unique constraints."""
+    # Rebuild like Field.clone(); Django 5.0 has no `unique` setter.
+    _, _, args, kwargs = field.deconstruct()
+    kwargs.update(primary_key=False, unique=False)
+    return field.__class__(*args, **kwargs)
 
 
 class Property:
@@ -225,9 +232,7 @@ class SampleSiftCollection:
             if isinstance(field_to_copy, models.AutoField):
                 field = models.BigIntegerField(null=field_to_copy.null)
             else:
-                field = field_to_copy.clone()
-            field.primary_key = False
-            field.unique = False
+                field = _unkeyed_clone(field_to_copy)
             # Collection writes must preserve source timestamps rather than let
             # Django's auto_now/auto_now_add hooks manufacture new values.
             if hasattr(field, "auto_now"):
@@ -243,9 +248,7 @@ class SampleSiftCollection:
                 )
             if not isinstance(declaration.field, models.Field):
                 raise CollectionDefinitionError(f"Property {name!r} requires a Django field.")
-            field = copy(declaration.field)
-            field.primary_key = False
-            field.unique = False
+            field = _unkeyed_clone(declaration.field)
             result[name] = field
         if cls.geometry is not None:
             if "geometry" in result:
