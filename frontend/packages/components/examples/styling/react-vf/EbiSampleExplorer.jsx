@@ -1,6 +1,6 @@
 // Load from your React application's browser entry point.
 // The host application supplies Visual Framework 2 CSS and IBM Plex Sans.
-import '@samplesift/components';
+import '@microbiome-informatics/samplesift';
 import './samplesift-vf.css';
 
 export function EbiSampleExplorer({

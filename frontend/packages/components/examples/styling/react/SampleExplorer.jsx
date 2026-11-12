@@ -1,5 +1,5 @@
 // Import this component from the browser entry point of your React app.
-import '@samplesift/components';
+import '@microbiome-informatics/samplesift';
 import '../samplesift-theme.css';
 
 export function SampleExplorer({
