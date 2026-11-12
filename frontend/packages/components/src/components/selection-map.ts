@@ -28,6 +28,9 @@ import type { MapLayerCatalog, MapLayerState, RasterMapLayer } from '../map/laye
 import { MANAGED_SOURCE_PREFIX, ManagedRasterLayers } from '../map/managed-layers';
 import type { ManagedLayerStatus } from '../map/managed-layers';
 
+/** Parts forwarded by the explorer wrappers; names are the public styling contract. */
+export const MAP_PARTS = 'map, map-surface, map-toolbar, map-button, map-layer-toggle, map-layers-panel, map-layer-option, map-opacity, map-legend, map-status, map-retry';
+
 type SelectionMode = 'rectangle' | 'polygon' | 'select';
 const SAMPLE_SOURCE = 'samplesift-samples';
 const SAMPLE_LAYER = 'samplesift-sample-points';
@@ -89,57 +92,63 @@ export class SampleSiftMap extends LitElement {
   };
 
   static styles = [unsafeCSS(mapLibreStyles), css`
-    :host { display: block; position: relative; min-height: 360px; height: 100%; color: #173c3b; }
+    :host { display: block; position: relative; min-height: 360px; height: 100%; color: var(--samplesift-text, #173c3b); font-family: var(--samplesift-font, inherit); }
     * { box-sizing: border-box; }
-    .surface { position: relative; container-type: inline-size; height: 100%; min-height: inherit; overflow: hidden; background: #e8eff0; }
+    .surface { position: relative; container-type: inline-size; height: 100%; min-height: inherit; overflow: hidden; background: var(--samplesift-surface-muted, #e8eff0); }
     .map { position: absolute; inset: 0; }
     .toolbar { position: absolute; z-index: 3; top: 16px; left: 16px; display: flex; gap: 4px; flex-wrap: wrap;
-      max-width: calc(100% - 76px); padding: 5px; border: 1px solid #d4dedc; border-radius: 10px;
-      background: rgba(255, 255, 255, 0.97); box-shadow: 0 3px 14px #102b2915; }
+      max-width: calc(100% - 76px); padding: 5px; border: 1px solid var(--samplesift-border-color, #d4dedc); border-radius: var(--samplesift-radius, 10px);
+      background: var(--samplesift-surface, rgba(255, 255, 255, 0.97)); box-shadow: 0 3px 14px #102b2915; }
     button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 34px;
-      border: 0; border-radius: 6px; padding: 7px 10px; background: transparent; color: #244742;
+      border: 0; border-radius: var(--samplesift-control-radius, 6px); padding: 7px 10px; background: var(--samplesift-control-background, transparent); color: var(--samplesift-control-text, var(--samplesift-text, #244742));
       font: 600 12px/1.2 var(--samplesift-font, system-ui, sans-serif); cursor: pointer; }
-    button:hover { background: #edf4f1; }
-    button[aria-pressed="true"] { background: #176d5c; color: white; }
-    button:focus-visible { outline: 3px solid #e7ac48; outline-offset: 2px; }
+    button:hover { background: var(--samplesift-surface-muted, #edf4f1); }
+    button[aria-pressed="true"] { background: var(--samplesift-accent, #176d5c); color: var(--samplesift-on-accent, white); }
+    button[aria-pressed="true"]:hover { background: var(--samplesift-accent-hover, var(--samplesift-accent, #176d5c)); }
+    button:focus-visible { outline: 3px solid var(--samplesift-focus-color, #e7ac48); outline-offset: 2px; }
     button:disabled { opacity: 0.42; cursor: not-allowed; }
-    .clear { border-left: 1px solid #dce5e2; border-radius: 0 6px 6px 0; }
+    .clear { border-left: 1px solid var(--samplesift-border-color, #dce5e2); border-radius: 0 var(--samplesift-control-radius, 6px) var(--samplesift-control-radius, 6px) 0; }
     svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; }
     .hint { position: absolute; z-index: 2; bottom: 30px; left: 16px; max-width: calc(100% - 32px);
-      padding: 9px 12px; border: 1px solid #d6dfda; border-radius: 8px; background: rgba(255,255,255,.96);
+      padding: 9px 12px; border: 1px solid var(--samplesift-border-color, #d6dfda); border-radius: var(--samplesift-radius, 8px); background: var(--samplesift-surface, rgba(255,255,255,.96));
       font: 500 12px/1.5 var(--samplesift-font, system-ui, sans-serif); box-shadow: 0 2px 12px #102b290d; }
-    .hint.error { color: #953d2a; border-color: #e5baa9; }
+    .hint.error { color: var(--samplesift-error-color, #953d2a); border-color: var(--samplesift-error-color, #e5baa9); background: var(--samplesift-error-background, var(--samplesift-surface, rgba(255,255,255,.96))); }
     .tile-status { display: flex; align-items: center; gap: 10px; }
     .tile-status.error { align-items: flex-start; }
     .tile-status strong { display: block; }
     .tile-status p { margin: 3px 0 7px; font-weight: 400; }
     .tile-status small { display: block; max-width: 280px; margin-top: 3px; font-size: 11px; font-weight: 400; }
-    .retry { border: 1px solid currentColor; background: white; color: #953d2a; }
-    .spinner { flex: 0 0 auto; width: 15px; height: 15px; border: 2px solid #bfd9d0;
-      border-top-color: #176d5c; border-radius: 50%; animation: spin .8s linear infinite; }
+    .retry { border: 1px solid currentColor; background: var(--samplesift-control-background, var(--samplesift-surface, white)); color: var(--samplesift-error-color, #953d2a); }
+    .spinner { flex: 0 0 auto; width: 15px; height: 15px; border: 2px solid var(--samplesift-border-color, #bfd9d0);
+      border-top-color: var(--samplesift-accent, #176d5c); border-radius: 50%; animation: spin .8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
     @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
     .layer-controls { position: absolute; z-index: 4; right: 60px; top: 16px; display: flex; flex-direction: column; align-items: flex-end; max-width: calc(100% - 32px); max-height: calc(100% - 51px); }
-    .layers-toggle { flex: 0 0 auto; background: #fff; border: 1px solid #cbdad3; box-shadow: 0 2px 10px #102b2918; }
-    .layers-toggle .layer-warning { color: #953d2a; }
-    .layers-panel { min-height: 0; flex: 1 1 auto; width: 292px; max-width: 100%; max-height: min(380px, calc(100vh - 220px)); overflow-y: auto; margin-top: 14px; padding: 14px; border: 1px solid #cbdad3; border-radius: 9px; background: rgba(255,255,255,.98); box-shadow: 0 3px 16px #102b2925; font: 12px/1.45 var(--samplesift-font, system-ui, sans-serif); }
+    .layers-toggle { flex: 0 0 auto; background: var(--samplesift-control-background, var(--samplesift-surface, #fff)); border: 1px solid var(--samplesift-control-border-color, var(--samplesift-border-color, #cbdad3)); box-shadow: 0 2px 10px #102b2918; }
+    .layers-toggle .layer-warning { color: var(--samplesift-error-color, #953d2a); }
+    .layers-panel { min-height: 0; flex: 1 1 auto; width: 292px; max-width: 100%; max-height: min(380px, calc(100vh - 220px)); overflow-y: auto; margin-top: 14px; padding: var(--samplesift-panel-padding, 14px); border: 1px solid var(--samplesift-border-color, #cbdad3); border-radius: var(--samplesift-radius, 9px); background: var(--samplesift-surface, rgba(255,255,255,.98)); box-shadow: 0 3px 16px #102b2925; font: 12px/1.45 var(--samplesift-font, system-ui, sans-serif); }
     .layers-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; } .layers-heading h3 { font: 650 13px/1.3 var(--samplesift-font, system-ui, sans-serif); margin: 0; }
     .layers-close { padding: 2px 6px; min-height: 26px; font-size: 18px; }
     .layers-panel fieldset { margin: 0; padding: 0; border: 0; min-width: 0; } .layers-panel legend { font-weight: 650; margin-bottom: 6px; padding: 0; }
     .layer-choice { display: flex; align-items: flex-start; gap: 7px; padding: 5px 0; cursor: pointer; }
-    .layer-choice input { margin: 2px 0 0; accent-color: #176d5c; flex: 0 0 auto; } .layer-choice small { display: block; margin-top: 2px; color: #687d72; font-size: 10px; line-height: 1.4; }
-    .layer-choice strong { font-weight: 550; } .layer-choice input:focus-visible, .layer-opacity input:focus-visible { outline: 2px solid #176d5c; outline-offset: 2px; }
-    .layer-overlays { margin-top: 10px; padding-top: 10px; border-top: 1px solid #dce5df; } .layer-opacity { display: block; padding: 4px 0 4px 20px; } .layer-opacity span { display: flex; align-items: center; justify-content: space-between; } .layer-opacity input { display: block; width: 100%; margin: 5px 0; accent-color: #176d5c; }
-    .layer-legend { margin: 5px 0 8px 20px; } .layer-legend summary { cursor: pointer; font-size: 11px; color: #3c6251; } .layer-legend ul { list-style: none; padding: 4px 0 0; margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; } .layer-legend li { display: flex; align-items: center; gap: 5px; font-size: 10px; } .layer-swatch { width: 10px; height: 10px; border: 1px solid #70807850; flex: 0 0 auto; }
-    .provider-status { margin: 4px 0 6px 20px; color: #667d70; font-size: 11px; } .provider-status.error { color: #953d2a; } .provider-status button { min-height: 26px; padding: 3px 6px; margin-top: 4px; color: inherit; border: 1px solid #d3b5a8; font-size: 11px; } .provider-status p { margin: 0; }
-    .layers-notice { max-width: 235px; margin-top: 6px; background: #fff; border: 1px solid #dec7b7; border-radius: 6px; padding: 6px 9px; font-size: 11px; line-height: 1.4; color: #953d2a; }
+    .layer-choice input { margin: 2px 0 0; accent-color: var(--samplesift-accent, #176d5c); flex: 0 0 auto; } .layer-choice small { display: block; margin-top: 2px; color: var(--samplesift-muted, #687d72); font-size: 10px; line-height: 1.4; }
+    .layer-choice strong { font-weight: 550; } .layer-choice input:focus-visible, .layer-opacity input:focus-visible { outline: 2px solid var(--samplesift-focus-color, var(--samplesift-accent, #176d5c)); outline-offset: 2px; }
+    .layer-overlays { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--samplesift-border-color, #dce5df); } .layer-opacity { display: block; padding: 4px 0 4px 20px; } .layer-opacity span { display: flex; align-items: center; justify-content: space-between; } .layer-opacity input { display: block; width: 100%; margin: 5px 0; accent-color: var(--samplesift-accent, #176d5c); }
+    .layer-legend { margin: 5px 0 8px 20px; } .layer-legend summary { cursor: pointer; font-size: 11px; color: var(--samplesift-muted, #3c6251); } .layer-legend ul { list-style: none; padding: 4px 0 0; margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; } .layer-legend li { display: flex; align-items: center; gap: 5px; font-size: 10px; } .layer-swatch { width: 10px; height: 10px; border: 1px solid var(--samplesift-border-color, #70807850); flex: 0 0 auto; }
+    .provider-status { margin: 4px 0 6px 20px; color: var(--samplesift-muted, #667d70); font-size: 11px; } .provider-status.error { color: var(--samplesift-error-color, #953d2a); background: var(--samplesift-error-background, transparent); } .provider-status button { min-height: 26px; padding: 3px 6px; margin-top: 4px; color: inherit; border: 1px solid var(--samplesift-control-border-color, var(--samplesift-border-color, #d3b5a8)); font-size: 11px; } .provider-status p { margin: 0; }
+    .layers-notice { max-width: 235px; margin-top: 6px; background: var(--samplesift-error-background, var(--samplesift-surface, #fff)); border: 1px solid var(--samplesift-border-color, #dec7b7); border-radius: var(--samplesift-control-radius, 6px); padding: 6px 9px; font-size: 11px; line-height: 1.4; color: var(--samplesift-error-color, #953d2a); }
     @container (max-width: 519px) {
       .layer-controls { right: 10px; top: 92px; max-width: calc(100% - 20px); max-height: calc(100% - 127px); }
-      .layers-panel { width: 262px; max-height: 205px; padding: 11px; }
+      .layers-panel { width: 262px; max-height: 205px; padding: var(--samplesift-panel-padding, 11px); }
     }
     @container (max-width: 360px) {
       .layer-controls { top: 106px; max-height: calc(100% - 141px); }
     }
+    .maplibregl-map { font-family: var(--samplesift-font, Helvetica Neue, Arial, Helvetica, sans-serif); }
+    .maplibregl-ctrl-group { background: var(--samplesift-control-background, var(--samplesift-surface, #fff)); border-radius: var(--samplesift-control-radius, 4px); }
+    .maplibregl-ctrl-group button:focus:first-child { border-radius: var(--samplesift-control-radius, 4px) var(--samplesift-control-radius, 4px) 0 0; }
+    .maplibregl-ctrl-group button:focus:last-child { border-radius: 0 0 var(--samplesift-control-radius, 4px) var(--samplesift-control-radius, 4px); }
+    .maplibregl-ctrl-group button:focus:only-child { border-radius: inherit; }
     .maplibregl-ctrl-top-right { top: 6px; right: 6px; }
     .maplibregl-ctrl-attrib { font-size: 10px; }
     @media (max-width: 520px) {
@@ -655,10 +664,10 @@ export class SampleSiftMap extends LitElement {
 
   private _renderProviderStatus(layer: RasterMapLayer) {
     const status = this._layerStatuses.find(item => item.id === layer.id);
-    if (status?.error) return html`<div class="provider-status error" role="status" data-testid=${`map-layer-error-${layer.id}`}>
-      <p>${status.error}</p><button type="button" @click=${() => this.retryMapLayer(layer.id)}>Retry ${layer.label}</button>
+    if (status?.error) return html`<div class="provider-status error" part="map-status" role="status" data-testid=${`map-layer-error-${layer.id}`}>
+      <p>${status.error}</p><button part="map-button map-retry" type="button" @click=${() => this.retryMapLayer(layer.id)}>Retry ${layer.label}</button>
     </div>`;
-    return status?.loading ? html`<p class="provider-status" role="status" data-testid=${`map-layer-loading-${layer.id}`}>Loading ${layer.label}…</p>` : nothing;
+    return status?.loading ? html`<p class="provider-status" part="map-status" role="status" data-testid=${`map-layer-loading-${layer.id}`}>Loading ${layer.label}…</p>` : nothing;
   }
 
   private _renderLayers() {
@@ -671,17 +680,17 @@ export class SampleSiftMap extends LitElement {
       @click=${(event: Event) => event.stopPropagation()} @dblclick=${(event: Event) => event.stopPropagation()}
       @wheel=${(event: Event) => event.stopPropagation()}
       @keydown=${(event: KeyboardEvent) => { event.stopPropagation(); if (event.key === 'Escape') { event.preventDefault(); this._closeLayers(); } }}>
-      ${hasLayers ? html`<button type="button" class="layers-toggle" aria-label="Layers" aria-expanded=${this._layersOpen}
+      ${hasLayers ? html`<button part="map-button map-layer-toggle" type="button" class="layers-toggle" aria-label="Layers" aria-expanded=${this._layersOpen}
         @click=${() => { this._layersOpen = !this._layersOpen; }}>
         <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m2 6 8-4 8 4-8 4-8-4Zm0 4 8 4 8-4M2 14l8 4 8-4"/></svg>
         Layers${errors.length ? html`<span class="layer-warning" aria-label="Some map layers failed">!</span>` : nothing}
       </button>` : nothing}
-      ${this._layerConfigError ? html`<p class="layers-notice" role="alert">${this._layerConfigError}</p>` : nothing}
-      ${!this._layersOpen && errors.length ? html`<p class="layers-notice" role="status">${errors.map(status => status.label).join(', ')} could not load. Open Layers to retry.</p>` : nothing}
-      ${this._layersOpen && catalog && state ? html`<section class="layers-panel" aria-label="Map layers">
-        <div class="layers-heading"><h3>Map layers</h3><button type="button" class="layers-close" aria-label="Close map layers" @click=${this._closeLayers}>×</button></div>
+      ${this._layerConfigError ? html`<p class="layers-notice" part="map-status" role="alert">${this._layerConfigError}</p>` : nothing}
+      ${!this._layersOpen && errors.length ? html`<p class="layers-notice" part="map-status" role="status">${errors.map(status => status.label).join(', ')} could not load. Open Layers to retry.</p>` : nothing}
+      ${this._layersOpen && catalog && state ? html`<section class="layers-panel" part="map-layers-panel" aria-label="Map layers">
+        <div class="layers-heading"><h3>Map layers</h3><button part="map-button" type="button" class="layers-close" aria-label="Close map layers" @click=${this._closeLayers}>×</button></div>
         ${catalog.basemaps.length ? html`<fieldset><legend>Basemap</legend>
-          ${catalog.basemaps.map(layer => html`<label class="layer-choice"><input type="radio" name="samplesift-basemap" .value=${layer.id}
+          ${catalog.basemaps.map(layer => html`<label class="layer-choice" part="map-layer-option"><input type="radio" name="samplesift-basemap" .value=${layer.id}
             aria-label=${layer.label} .checked=${state.basemap === layer.id}
             @change=${() => this._changeMapLayers({ ...state, basemap: layer.id })}>
             <span><strong>${layer.label}</strong>${layer.description ? html`<small>${layer.description}</small>` : layer.year ? html`<small>${layer.year}</small>` : nothing}</span>
@@ -689,15 +698,15 @@ export class SampleSiftMap extends LitElement {
         </fieldset>` : nothing}
         ${(catalog.overlays ?? []).map(layer => {
           const preference = state.overlays[layer.id];
-          return html`<div class="layer-overlays"><label class="layer-choice"><input type="checkbox" aria-label=${layer.label}
+          return html`<div class="layer-overlays"><label class="layer-choice" part="map-layer-option"><input type="checkbox" aria-label=${layer.label}
             .checked=${preference.visible} @change=${(event: Event) => this._changeMapLayers({ ...state, overlays: { ...state.overlays, [layer.id]: { ...preference, visible: (event.target as HTMLInputElement).checked } } })}>
             <span><strong>${layer.label}${layer.year ? html` · ${layer.year}` : nothing}</strong>${layer.description ? html`<small>${layer.description}</small>` : nothing}</span>
           </label>
-          ${preference.visible ? html`<label class="layer-opacity"><span>${layer.label} opacity <output>${Math.round(preference.opacity * 100)}%</output></span>
+          ${preference.visible ? html`<label class="layer-opacity" part="map-opacity"><span>${layer.label} opacity <output>${Math.round(preference.opacity * 100)}%</output></span>
             <input type="range" min="0" max="100" step="5" aria-label=${`${layer.label} opacity`} .value=${String(Math.round(preference.opacity * 100))}
               @input=${(event: Event) => this._changeMapLayers({ ...state, overlays: { ...state.overlays, [layer.id]: { ...preference, opacity: Number((event.target as HTMLInputElement).value) / 100 } } })}>
           </label>${this._renderProviderStatus(layer)}` : nothing}
-          ${layer.legend?.length ? html`<details class="layer-legend"><summary>${layer.label} legend${layer.year ? ` · ${layer.year}` : ''}</summary><ul>
+          ${layer.legend?.length ? html`<details class="layer-legend" part="map-legend"><summary>${layer.label} legend${layer.year ? ` · ${layer.year}` : ''}</summary><ul>
             ${layer.legend.map(item => html`<li><span class="layer-swatch" style=${`background-color: ${item.color}`} aria-hidden="true"></span>${item.label}</li>`)}
           </ul></details>` : nothing}
           </div>`;
@@ -719,31 +728,31 @@ export class SampleSiftMap extends LitElement {
     const tileError = this.tileSource ? this._tileRequestError || this._tileRenderError : '';
     const tilesLoading = Boolean(this.tileSource && (this._tilePending > 0 || this._tilesRendering));
     return html`
-      <div class="surface">
+      <div class="surface" part="map-surface">
         <div class="map" part="map" aria-busy=${tilesLoading}></div>
-        <div class="toolbar" role="group" aria-label="Map selection tools">
-          <button type="button" aria-label="Pan map" aria-pressed=${this._mode === 'select'}
+        <div class="toolbar" part="map-toolbar" role="group" aria-label="Map selection tools">
+          <button part="map-button" type="button" aria-label="Pan map" aria-pressed=${this._mode === 'select'}
             ?disabled=${!this._ready} @click=${() => this.setMode('select')}>
             <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2v16M2 10h16M7 5l3-3 3 3M7 15l3 3 3-3M5 7l-3 3 3 3M15 7l3 3-3 3"/></svg>Pan
           </button>
-          ${this.selectionModes.includes('rectangle') ? html`<button type="button" aria-pressed=${this._mode === 'rectangle'} ?disabled=${!this._ready}
+          ${this.selectionModes.includes('rectangle') ? html`<button part="map-button" type="button" aria-pressed=${this._mode === 'rectangle'} ?disabled=${!this._ready}
             @click=${() => this.setMode('rectangle')}>
             <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="4" width="14" height="12" rx="1"/></svg>Rectangle
           </button>` : nothing}
-          ${this.selectionModes.includes('polygon') ? html`<button type="button" aria-pressed=${this._mode === 'polygon'} ?disabled=${!this._ready}
+          ${this.selectionModes.includes('polygon') ? html`<button part="map-button" type="button" aria-pressed=${this._mode === 'polygon'} ?disabled=${!this._ready}
             @click=${() => this.setMode('polygon')}>
             <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m4 4 11-1 3 10-8 5-8-7Z"/></svg>Polygon
           </button>` : nothing}
-          <button type="button" class="clear" ?disabled=${!this._ready || (!this.selection && this._mode === 'select')}
+          <button part="map-button" type="button" class="clear" ?disabled=${!this._ready || (!this.selection && this._mode === 'select')}
             @click=${() => this.clearSelection()}>Clear</button>
         </div>
         ${this._renderLayers()}
-        ${tileError ? html`<div class="hint tile-status error" role="alert" data-testid="tile-error">
+        ${tileError ? html`<div class="hint tile-status error" part="map-status" role="alert" data-testid="tile-error">
           <div><strong>Map locations could not load.</strong><p>${tileError} Some locations may be missing.</p>
-            <button type="button" class="retry" @click=${this.retryTiles}>Retry map tiles</button></div>
-        </div>` : tilesLoading ? html`<div class="hint tile-status" role="status" aria-live="polite" data-testid="tile-loading">
+            <button part="map-button map-retry" type="button" class="retry" @click=${this.retryTiles}>Retry map tiles</button></div>
+        </div>` : tilesLoading ? html`<div class="hint tile-status" part="map-status" role="status" aria-live="polite" data-testid="tile-loading">
           <span class="spinner" aria-hidden="true"></span><span>${this._hasLoadedTiles ? html`Updating map detail…<small>Cluster counts may still reflect the previous view.</small>` : 'Loading map locations…'}</span>
-        </div>` : html`<div class="hint ${this._error ? 'error' : ''}" role="status" aria-live="polite">${hint}</div>`}
+        </div>` : html`<div class="hint ${this._error ? 'error' : ''}" part="map-status" role="status" aria-live="polite">${hint}</div>`}
       </div>
     `;
   }

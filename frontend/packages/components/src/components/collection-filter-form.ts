@@ -26,6 +26,9 @@ interface FilterCard {
 }
 let formSequence = 0;
 
+/** Styling hooks forwarded by the collection explorer and its public wrapper. */
+export const FILTER_PARTS = 'filter-form, filter-heading, filter-card, filter-label, filter-condition, filter-remove, filter-fields, filter-add, filter-picker, filter-search, filter-option, filter-actions, apply-button, discard-button, clear-button, filter-status, filter-error';
+
 /** Metadata-derived cards keep drafts local until an explicit Apply (or host-opted-in auto apply). */
 export class SampleSiftCollectionFilterForm extends LitElement {
   static properties = {
@@ -370,21 +373,21 @@ export class SampleSiftCollectionFilterForm extends LitElement {
   private renderCard(card: FilterCard) {
     const label = fieldLabel(card.field);
     const condition = filterOperatorLabels[String(card.data.f0?.operator)] || 'Choose condition';
-    return html`<section class="card" role="group" aria-label=${`${label} filter`}>
-      <div class="card-heading"><h4>${label}</h4><button type="button" class="remove" aria-label=${`Remove ${label} filter`} title="Remove filter" ?disabled=${this.disabled} @click=${() => this.removeField(card.field.name)}>×</button></div>
-      ${card.retained ? html`<p class="hint">These saved conditions are preserved. Remove this filter to replace them.</p>
+    return html`<section class="card" part="filter-card" role="group" aria-label=${`${label} filter`}>
+      <div class="card-heading"><h4 part="filter-label">${label}</h4><button type="button" class="remove" part="filter-remove" aria-label=${`Remove ${label} filter`} title="Remove filter" ?disabled=${this.disabled} @click=${() => this.removeField(card.field.name)}>×</button></div>
+      ${card.retained ? html`<p class="hint" part="filter-status">These saved conditions are preserved. Remove this filter to replace them.</p>
         <ul class="retained">${card.retained.map(predicate => html`<li>${filterOperatorLabels[predicate.operator]}${'value' in predicate ? ` ${Array.isArray(predicate.value) ? predicate.value.join(', ') : String(predicate.value)}` : ''}</li>`)}</ul>` : html`
-      <button class="condition" type="button" aria-label=${`Change ${label} condition`} aria-expanded=${card.advanced} ?disabled=${this.disabled} @click=${() => this.toggleCondition(card)}>${condition}<span aria-hidden="true">⌄</span></button>
+      <button class="condition" part="filter-condition" type="button" aria-label=${`Change ${label} condition`} aria-expanded=${card.advanced} ?disabled=${this.disabled} @click=${() => this.toggleCondition(card)}>${condition}<span aria-hidden="true">⌄</span></button>
       <fieldset ?disabled=${this.disabled}>
-        <gui-form data-card-id=${card.id} .config=${card.config}
+        <gui-form part="filter-fields" data-card-id=${card.id} .config=${card.config}
           @formEvent=${(event: CustomEvent<{ name: string; data: unknown }>) => this.onFormEvent(card, event)}
           @formSubmit=${(event: Event) => { event.stopPropagation(); this.applyFilters(); }}
           @formHealth=${(event: CustomEvent<{ status: string; message?: string }>) => this.onHealth(card, event)}
           @gui-input-error=${(event: CustomEvent<{ message: string }>) => this.onInputError(card, event)}
         ></gui-form>
       </fieldset>`}
-      ${card.data.f0?.operator === 'isNull' ? html`<p class="hint">Matches records where this field is missing.</p>` : nothing}
-      ${card.error ? html`<p class="error" role="alert">${card.error}</p>` : nothing}
+      ${card.data.f0?.operator === 'isNull' ? html`<p class="hint" part="filter-status">Matches records where this field is missing.</p>` : nothing}
+      ${card.error ? html`<p class="error" part="filter-error" role="alert">${card.error}</p>` : nothing}
     </section>`;
   }
 
@@ -392,59 +395,92 @@ export class SampleSiftCollectionFilterForm extends LitElement {
     const available = (this.metadata?.fields ?? []).filter(field => !this._cards.has(field.name));
     const search = this._search.trim().toLocaleLowerCase();
     const matches = available.filter(field => `${fieldLabel(field)} ${field.name} ${field.description ?? ''}`.toLocaleLowerCase().includes(search));
-    return html`<section aria-label="Collection filters">
-      <div class="heading"><h3>Filters${this._active.length ? html`<span class="count">${this._active.length}</span>` : nothing}</h3>
-        ${this._active.length || this._applied.length || this._unavailable ? html`<button class="link" type="button" @click=${this.clearFilters} ?disabled=${this.disabled}>Clear filters</button>` : nothing}</div>
-      ${this._error ? html`<p class="error" role="alert">${this._error}</p>` : nothing}
-      ${!this.metadata ? html`<p class="hint" role="status">Loading available filters…</p>` : nothing}
-      ${!this._active.length && this.metadata && !this._unavailable ? html`<p class="empty">Start with a field you want to narrow down.</p>` : nothing}
+    return html`<section part="filter-form" aria-label="Collection filters">
+      <div class="heading" part="filter-heading"><h3>Filters${this._active.length ? html`<span class="count">${this._active.length}</span>` : nothing}</h3>
+        ${this._active.length || this._applied.length || this._unavailable ? html`<button class="link" part="clear-button" type="button" @click=${this.clearFilters} ?disabled=${this.disabled}>Clear filters</button>` : nothing}</div>
+      ${this._error ? html`<p class="error" part="filter-error" role="alert">${this._error}</p>` : nothing}
+      ${!this.metadata ? html`<p class="hint" part="filter-status" role="status">Loading available filters…</p>` : nothing}
+      ${!this._active.length && this.metadata && !this._unavailable ? html`<p class="empty" part="filter-status">Start with a field you want to narrow down.</p>` : nothing}
       ${!this._unavailable ? repeat(this._active, name => this._cards.get(name)?.id, name => {
         const card = this._cards.get(name); return card ? this.renderCard(card) : nothing;
       }) : nothing}
-      ${this.metadata && !this._unavailable ? html`<button class="add" type="button" @click=${this.openPicker} aria-expanded=${this._picker} ?disabled=${this.disabled || !available.length}><span aria-hidden="true">＋</span> Add filter</button>` : nothing}
-      ${this._picker ? html`<div class="picker">
-        <input type="search" aria-label="Search filters" placeholder="Find a field…" .value=${this._search}
+      ${this.metadata && !this._unavailable ? html`<button class="add" part="filter-add" type="button" @click=${this.openPicker} aria-expanded=${this._picker} ?disabled=${this.disabled || !available.length}><span aria-hidden="true">＋</span> Add filter</button>` : nothing}
+      ${this._picker ? html`<div class="picker" part="filter-picker">
+        <input part="filter-search" type="search" aria-label="Search filters" placeholder="Find a field…" .value=${this._search}
           @input=${(event: Event) => { this._search = (event.target as HTMLInputElement).value; }}
           @keydown=${(event: KeyboardEvent) => {
             if (event.key === 'Escape') { this._picker = false; this.renderRoot.querySelector<HTMLButtonElement>('.add')?.focus(); }
             if (event.key === 'Enter' && matches.length === 1) { event.preventDefault(); this.addField(matches[0].name); }
           }}>
-        <ul>${matches.map(field => html`<li><button type="button" aria-label=${`Add ${fieldLabel(field)} filter`} @click=${() => this.addField(field.name)}><strong>${fieldLabel(field)}</strong>${field.description ? html`<small>${field.description}</small>` : nothing}</button></li>`)}</ul>
-        ${!matches.length ? html`<p class="hint">No matching fields.</p>` : nothing}
+        <ul>${matches.map(field => html`<li><button part="filter-option" type="button" aria-label=${`Add ${fieldLabel(field)} filter`} @click=${() => this.addField(field.name)}><strong>${fieldLabel(field)}</strong>${field.description ? html`<small>${field.description}</small>` : nothing}</button></li>`)}</ul>
+        ${!matches.length ? html`<p class="hint" part="filter-status">No matching fields.</p>` : nothing}
       </div>` : nothing}
-      <div class="actions">
-      ${this._dirty ? html`<div class="draft" role="status"><span>${this._valid ? this.autoApply ? 'Updating filters shortly…' : 'Changes ready to apply.' : 'Finish or remove the incomplete filter.'}</span><button class="link" type="button" @click=${this.discardChanges} ?disabled=${this.disabled}>Discard changes</button></div>` : nothing}
-      ${!this.autoApply ? html`<button class="apply" type="button" @click=${this.applyFilters} ?disabled=${this.disabled || !this.metadata || this._unavailable || !this._dirty}>Apply filters</button>` : nothing}
-      <p class="footnote" aria-live="polite">${this.busy ? 'Updating results…' : this.autoApply ? 'Valid changes update results automatically.' : 'Results update when you apply your filters.'}</p>
+      <div class="actions" part="filter-actions">
+      ${this._dirty ? html`<div class="draft" part="filter-status" role="status"><span>${this._valid ? this.autoApply ? 'Updating filters shortly…' : 'Changes ready to apply.' : 'Finish or remove the incomplete filter.'}</span><button class="link" part="discard-button" type="button" @click=${this.discardChanges} ?disabled=${this.disabled}>Discard changes</button></div>` : nothing}
+      ${!this.autoApply ? html`<button class="apply" part="apply-button" type="button" @click=${this.applyFilters} ?disabled=${this.disabled || !this.metadata || this._unavailable || !this._dirty}>Apply filters</button>` : nothing}
+      <p class="footnote" part="filter-status" aria-live="polite">${this.busy ? 'Updating results…' : this.autoApply ? 'Valid changes update results automatically.' : 'Results update when you apply your filters.'}</p>
       </div>
     </section>`;
   }
 
   static styles = [unsafeCSS(golemCss.replaceAll(':root', ':host')), css`
-    :host { display: block; min-width: 0; font: inherit; color: inherit; --gui-color-primary-500: #0d766e; --gui-color-primary-600: #0b655e; --gui-space-4: .65rem; }
+    :host {
+      display: block; min-width: 0; font: inherit; font-family: var(--samplesift-font, inherit); color: var(--samplesift-text, inherit);
+      /* Keep Golem's own defaults while letting one host theme reach generated controls. */
+      --gui-color-primary-500: var(--samplesift-accent, #0d766e);
+      --gui-color-primary-600: var(--samplesift-accent-hover, #0b655e);
+      --gui-font-family: var(--samplesift-font, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif);
+      --gui-bg-default: var(--samplesift-control-background, var(--samplesift-surface, var(--gui-color-white)));
+      --gui-bg-surface: var(--samplesift-control-background, var(--samplesift-surface, var(--gui-color-white)));
+      --gui-bg-surface-hover: var(--samplesift-surface-muted, var(--gui-color-neutral-200));
+      --gui-bg-surface-active: var(--samplesift-surface-muted, var(--gui-color-neutral-100));
+      --gui-bg-disabled: var(--samplesift-surface-muted, var(--gui-color-neutral-300));
+      --gui-text-default: var(--samplesift-control-text, var(--samplesift-text, var(--gui-color-neutral-900)));
+      --gui-text-secondary: var(--samplesift-muted, var(--gui-color-neutral-500));
+      --gui-text-muted: var(--samplesift-muted, var(--gui-color-neutral-400));
+      --gui-text-disabled: var(--samplesift-muted, var(--gui-color-neutral-400));
+      --gui-text-inverse: var(--samplesift-on-accent, var(--gui-color-white));
+      --gui-border-default: var(--samplesift-control-border-color, var(--samplesift-border-color, var(--gui-color-neutral-300)));
+      --gui-border-subtle: var(--samplesift-border-color, var(--gui-color-neutral-200));
+      --gui-border-strong: var(--samplesift-control-border-color, var(--samplesift-border-color, var(--gui-color-neutral-500)));
+      --gui-border-disabled: var(--samplesift-border-color, var(--gui-color-neutral-200));
+      --gui-border-focus: var(--samplesift-focus-color, var(--gui-color-primary-500));
+      --gui-intent-primary: var(--samplesift-accent, var(--gui-color-primary-600));
+      --gui-intent-primary-hover: var(--samplesift-accent-hover, var(--gui-color-primary-700));
+      --gui-intent-primary-active: var(--samplesift-accent-hover, var(--gui-color-primary-800));
+      --gui-intent-primary-text: var(--samplesift-on-accent, var(--gui-color-white));
+      --gui-intent-error: var(--samplesift-error-color, var(--gui-color-error-600));
+      --gui-intent-error-text: var(--samplesift-error-color, var(--gui-color-error-900));
+      --gui-intent-error-bg: var(--samplesift-error-background, var(--gui-color-error-50));
+      --gui-intent-error-surface: var(--samplesift-error-background, var(--gui-color-error-50));
+      --gui-radius-md: var(--samplesift-control-radius, .25rem);
+      --gui-radius-sm: var(--samplesift-control-radius, .125rem);
+      --gui-space-4: .65rem;
+    }
     * { box-sizing: border-box; } section { min-width: 0; } button, input { font: inherit; }
-    button { cursor: pointer; } button:disabled { opacity: .5; cursor: default; } button:focus-visible, input:focus-visible { outline: 2px solid #0d766e; outline-offset: 2px; }
+    button { cursor: pointer; } button:disabled { opacity: .5; cursor: default; } button:focus-visible, input:focus-visible { outline: 2px solid var(--samplesift-focus-color, var(--samplesift-accent, #0d766e)); outline-offset: 2px; }
     .heading, .card-heading { display: flex; align-items: center; justify-content: space-between; gap: .65rem; }
     .heading { margin-bottom: .85rem; } h3 { margin: 0; font-size: 1rem; display: flex; align-items: center; gap: .5rem; }
-    .count { background: #e4eee6; color: #46694f; border-radius: 1rem; padding: .1rem .45rem; font-size: .7rem; }
-    .link { color: #286653; background: none; border: 0; padding: .15rem 0; font-size: .75rem; text-decoration: underline; text-underline-offset: 2px; }
-    .empty, .hint, .footnote { color: #647b68; font-size: .78rem; line-height: 1.45; } .empty { margin: .2rem 0 1rem; } .footnote { margin: .65rem 0 0; font-size: .7rem; }
-    .card { background: #fff; border: 1px solid #d4e0d5; border-radius: .65rem; padding: .8rem; margin-bottom: .7rem; box-shadow: 0 1px 2px #193c2410; }
-    h4 { margin: 0; font-size: .85rem; font-weight: 650; } .remove { border: 0; background: none; color: #7a8b7b; font-size: 1.25rem; width: 1.6rem; height: 1.6rem; line-height: 1; border-radius: .25rem; }
-    .remove:hover { background: #f3f5ef; color: #244a35; } .condition { display: flex; align-items: center; gap: .4rem; border: 0; background: none; color: #57725e; padding: .35rem 0 .55rem; font-size: .73rem; }
-    .condition span { color: #829184; } fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
-    .add { width: 100%; display: flex; align-items: center; justify-content: center; gap: .35rem; border: 1px dashed #a6bead; border-radius: .5rem; padding: .65rem; background: #f8fbf6; color: #2d6852; font-size: .8rem; font-weight: 600; }
-    .add:hover { background: #edf5eb; } .picker { border: 1px solid #c7d8cb; border-radius: .5rem; margin-top: .5rem; padding: .5rem; background: #fff; }
-    .picker input { width: 100%; border: 1px solid #cbd7cc; border-radius: .35rem; padding: .5rem; font-size: .8rem; } .picker ul { list-style: none; margin: .35rem 0 0; padding: 0; max-height: 240px; overflow-y: auto; }
-    .picker li button { display: block; width: 100%; text-align: left; border: 0; background: none; padding: .55rem .45rem; color: #2d4b35; border-radius: .3rem; font-size: .8rem; }
-    .picker li button:hover { background: #edf5eb; } .picker small { display: block; margin-top: .15rem; color: #738276; font-size: .7rem; line-height: 1.35; }
-    .actions { position: sticky; bottom: 0; z-index: 3; margin-top: .65rem; padding: .3rem 0 .1rem; background: #f7faf5; border-top: 1px solid #dfe8dc; }
-    .draft { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .4rem; margin-top: .7rem; font-size: .74rem; color: #77602c; }
-    .retained { margin: .4rem 0 0; padding-left: 1.1rem; color: #526c59; font-size: .75rem; line-height: 1.5; }
-    .error { color: #962f27; background: #fff2ef; border-radius: .35rem; font-size: .75rem; line-height: 1.4; padding: .55rem; margin: .55rem 0 0; }
-    .apply { margin-top: .8rem; width: 100%; border: 1px solid #1a6856; border-radius: .45rem; background: #1b705c; color: #fff; padding: .7rem; font-size: .82rem; font-weight: 650; }
-    .apply:hover:not(:disabled) { background: #155b4a; } gui-form, gui-core-form { display: block; min-width: 0; }
+    .count { background: var(--samplesift-surface-muted, #e4eee6); color: var(--samplesift-muted, #46694f); border-radius: 1rem; padding: .1rem .45rem; font-size: .7rem; }
+    .link { color: var(--samplesift-accent, #286653); background: none; border: 0; padding: .15rem 0; font-size: .75rem; text-decoration: underline; text-underline-offset: 2px; }
+    .empty, .hint, .footnote { color: var(--samplesift-muted, #647b68); font-size: .78rem; line-height: 1.45; } .empty { margin: .2rem 0 1rem; } .footnote { margin: .65rem 0 0; font-size: .7rem; }
+    .card { background: var(--samplesift-surface, #fff); border: 1px solid var(--samplesift-border-color, #d4e0d5); border-radius: var(--samplesift-radius, .65rem); padding: var(--samplesift-filter-card-padding, .8rem); margin-bottom: .7rem; box-shadow: var(--samplesift-shadow, 0 1px 2px #193c2410); }
+    h4 { margin: 0; font-size: .85rem; font-weight: 650; } .remove { border: 0; background: none; color: var(--samplesift-muted, #7a8b7b); font-size: 1.25rem; width: 1.6rem; height: 1.6rem; line-height: 1; border-radius: var(--samplesift-control-radius, .25rem); }
+    .remove:hover { background: var(--samplesift-surface-muted, #f3f5ef); color: var(--samplesift-text, #244a35); } .condition { display: flex; align-items: center; gap: .4rem; border: 0; background: none; color: var(--samplesift-muted, #57725e); padding: .35rem 0 .55rem; font-size: .73rem; }
+    .condition span { color: var(--samplesift-muted, #829184); } fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+    .add { width: 100%; display: flex; align-items: center; justify-content: center; gap: .35rem; border: 1px dashed var(--samplesift-control-border-color, var(--samplesift-border-color, #a6bead)); border-radius: var(--samplesift-control-radius, .5rem); padding: .65rem; background: var(--samplesift-control-background, var(--samplesift-surface-muted, #f8fbf6)); color: var(--samplesift-control-text, var(--samplesift-accent, #2d6852)); font-size: .8rem; font-weight: 600; }
+    .add:hover { background: var(--samplesift-surface-muted, #edf5eb); } .picker { border: 1px solid var(--samplesift-border-color, #c7d8cb); border-radius: var(--samplesift-radius, .5rem); margin-top: .5rem; padding: .5rem; background: var(--samplesift-surface, #fff); }
+    .picker input { width: 100%; border: 1px solid var(--samplesift-control-border-color, var(--samplesift-border-color, #cbd7cc)); border-radius: var(--samplesift-control-radius, .35rem); padding: .5rem; font-size: .8rem; background: var(--samplesift-control-background, Field); color: var(--samplesift-control-text, var(--samplesift-text, FieldText)); } .picker ul { list-style: none; margin: .35rem 0 0; padding: 0; max-height: 240px; overflow-y: auto; }
+    .picker li button { display: block; width: 100%; text-align: left; border: 0; background: none; padding: .55rem .45rem; color: var(--samplesift-text, #2d4b35); border-radius: var(--samplesift-control-radius, .3rem); font-size: .8rem; }
+    .picker li button:hover { background: var(--samplesift-surface-muted, #edf5eb); } .picker small { display: block; margin-top: .15rem; color: var(--samplesift-muted, #738276); font-size: .7rem; line-height: 1.35; }
+    .actions { position: sticky; bottom: 0; z-index: 3; margin-top: .65rem; padding: .3rem 0 .1rem; background: var(--samplesift-surface-muted, #f7faf5); border-top: 1px solid var(--samplesift-border-color, #dfe8dc); }
+    .draft { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .4rem; margin-top: .7rem; font-size: .74rem; color: var(--samplesift-warning-color, #77602c); }
+    .retained { margin: .4rem 0 0; padding-left: 1.1rem; color: var(--samplesift-muted, #526c59); font-size: .75rem; line-height: 1.5; }
+    .error { color: var(--samplesift-error-color, #962f27); background: var(--samplesift-error-background, #fff2ef); border-radius: var(--samplesift-radius, .35rem); font-size: .75rem; line-height: 1.4; padding: .55rem; margin: .55rem 0 0; }
+    .apply { margin-top: .8rem; width: 100%; border: 1px solid var(--samplesift-accent, #1a6856); border-radius: var(--samplesift-control-radius, .45rem); background: var(--samplesift-accent, #1b705c); color: var(--samplesift-on-accent, #fff); padding: .7rem; font-size: .82rem; font-weight: 650; }
+    .apply:hover:not(:disabled) { background: var(--samplesift-accent-hover, #155b4a); } gui-form, gui-core-form { display: block; min-width: 0; }
     .card .gui-label { font-size: .73rem; } .card .gui-widget-input { max-width: 100%; } .card gui-number .gui-widget-input { width: 100%; }
+
   `];
 }
 

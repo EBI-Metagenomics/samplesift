@@ -37,6 +37,10 @@ Filters use a searchable **Add filter** picker with compact field cards, inclusi
 
 Use `collectionState`, silent `setCollectionState(state)`, `collectionMetadata`, and `collectionPaused` for host integration. Collection events and pure URL helpers are documented in [COLLECTION_API.md](COLLECTION_API.md). The host owns optional URL synchronization. The direct `<sample-sift-collection>` element exposes the same explorer without the legacy wrapper.
 
+## Styling and framework examples
+
+Use CSS variables for the theme and named CSS parts for individual controls. The default appearance is unchanged. See the [styling guide](STYLING.md) for the supported hooks and simple React and Django template examples. For an app using Visual Framework 2, see the [EBI Visual Framework React example](examples/styling/react-vf/README.md).
+
 ## Map backgrounds and environmental layers
 
 The **Layers** control offers Standard (OpenStreetMap), Satellite (ESA Sentinel-2 RGB, 2021 composite), and Topographic (OpenTopoMap) backgrounds. **WorldCover 2021** is a separate land-cover overlay with opacity and a class legend. Its colors describe the 2021 map, not the environment on a sample's collection date. These are display layers: showing WorldCover does not add a land-cover search predicate.
@@ -330,4 +334,4 @@ map.addEventListener('sampleclick', event => console.log(event.detail.sample));
 
 ## Limits
 
-Collection mode supports a declared subset of JSON Schema and CQL2, backend result pages and explicitly configured vector tiles; see its [capabilities and limits](COLLECTION_API.md). Legacy mode retains the four fixed filter groups, local taxonomy suggestions and synthetic sample evidence. The frontend does not provide an MGnify importer, remote taxonomy autocomplete or lineage resolution, freehand drawing, PGlite, or a verified 100k-record performance result. MapLibre replaces the earlier Leaflet proposal. Dependency licenses remain their own; a project license has not yet been selected for this prototype.
+Collection mode supports a declared subset of JSON Schema and CQL2, backend result pages and explicitly configured vector tiles; see its [capabilities and limits](COLLECTION_API.md). Legacy mode retains the four fixed filter groups, local taxonomy suggestions and synthetic sample evidence. The frontend does not provide an MGnify importer, remote taxonomy autocomplete or lineage resolution, freehand drawing, PGlite, or a verified 100k-record performance result. MapLibre replaces the earlier Leaflet proposal. The component package is licensed under Apache-2.0; bundled dependencies retain their own licenses (included in `dist/THIRD_PARTY_NOTICES.txt`).
