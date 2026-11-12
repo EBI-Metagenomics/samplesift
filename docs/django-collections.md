@@ -248,7 +248,8 @@ Each API collection has discovery and two static `QUERY` endpoints:
   By default, through zoom 14 it groups filtered points by proximity in Web Mercator using
   PostGIS DBSCAN with a 40-pixel distance and a minimum of one point. Connected
   chains of nearby points form one cluster, so a cluster can span more than 40
-  pixels. Clustering considers the entire filtered collection before selecting
+  pixels. Pixels are screen pixels of MapLibre's default 512-pixel vector tiles.
+  Clustering considers the entire filtered collection before selecting
   cluster centroids for a tile, ensuring adjacent tiles agree on membership. This
   can be expensive for large collections. By default, at zoom 15 and above it returns
   individual points. Cluster IDs depend on membership and are not permanent.
@@ -328,6 +329,32 @@ Spatial collection indexes use Django's PostgreSQL `GistIndex`; creating and
 registering a spatial collection therefore requires Django's PostgreSQL support
 and its database driver as well as the PostGIS database. Add
 `django.contrib.postgres` to `INSTALLED_APPS` for spatial collections.
+
+## Embedding the explorer
+
+The `samplesift` template tag renders the `<sample-sift>` collection explorer for a
+registered spatial collection. The host project needs `django.contrib.staticfiles`
+and `STATIC_URL`, and must include `api.urls` in its URL configuration.
+
+```django
+{% load samplesift %}
+{% samplesift "occurrences" %}
+{% samplesift "occurrences" page_size=25 filter_mode="manual" id="left" class="explorer" %}
+```
+
+| Argument | Default | Meaning |
+| --- | --- | --- |
+| collection | required | The collection's `api_name`; an unknown name raises `KeyError`. |
+| `page_size` | `SAMPLESIFT_DEFAULT_PAGE_SIZE` | Results per page, capped at `SAMPLESIFT_MAX_PAGE_SIZE`. |
+| `filter_mode` | component default (`auto`) | `auto` applies filters as they change; `manual` adds an Apply step. |
+| `filter_debounce_ms` | component default (500) | Delay before automatic filters apply. |
+| `api_url` | reversed API root | Override when the API is served from another host. |
+| `id`, `class` | none | Copied onto the element. |
+
+The tile layer is the collection's `api_name`. The module script is emitted once per
+template render. The built components are not committed: run
+`npm run build:django --prefix frontend` before building the Python package; it writes
+them to `src/samplesift/django/static/samplesift/components/`.
 
 ## API settings
 

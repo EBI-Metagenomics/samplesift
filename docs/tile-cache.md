@@ -206,9 +206,11 @@ GROUP BY (tx, ty) ──► ST_AsMVT(... ORDER BY cluster_id) ──► (version
   `s = 2 · 20037508.342789244 / 2^z`, the fractional tile column is
   `fx = (X + 20037508.342789244) / s` and the row is
   `fy = (20037508.342789244 − Y) / s`. The candidates are every integer from
-  `floor(f − 10⁻⁶)` to `floor(f + 10⁻⁶)` on each axis, clamped to the tile grid.
+  `floor(f − 1/4096)` to `floor(f + 1/4096)` on each axis, clamped to the tile grid.
   - This is usually one tile.
-  - A centroid on (or within rounding of) a tile edge is offered to both neighbours.
+  - A centroid within one MVT pixel of a tile edge is offered to both neighbours.
+    `ST_AsMVTGeom` snaps to the 4096 grid, so a centroid up to half a pixel past an
+    edge lands on it and belongs to both tiles.
 - **Exact selection.** `ST_AsMVTGeom` is then applied with each candidate tile's
   envelope, exactly as for an on-demand tile, and returns NULL for tiles that would not
   contain the feature. The candidates only have to *include* the right tiles; PostGIS

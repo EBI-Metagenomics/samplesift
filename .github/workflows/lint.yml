@@ -36,6 +36,9 @@ jobs:
       - name: Build frontend components
         run: npm run build --prefix frontend
 
+      - name: Build Django static components
+        run: npm run build:django --prefix frontend
+
       - name: Test frontend data layer
         run: npm test --prefix frontend
 
@@ -46,3 +49,8 @@ jobs:
 
       - name: Lint with Biome
         run: uv run pre-commit run biome-lint --all-files
+
+      - name: Lint Django templates with djLint
+        run: |
+          uv run pre-commit run djlint-reformat-django --all-files
+          uv run pre-commit run djlint-django --all-files

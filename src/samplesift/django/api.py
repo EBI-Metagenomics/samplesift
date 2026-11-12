@@ -520,8 +520,10 @@ def _zoom_tiles(
     """
     connection = connections[registry.target_database()]
     clusters_sql, clusters_params = _clusters_sql(collection, query, z)
-    # Fractional tile coordinates; the small margin admits both neighbours of a
-    # centroid on (or within rounding of) a tile edge.
+    # Fractional tile coordinates. ST_AsMVTGeom snaps to the MVT grid, so a centroid
+    # within half a tile pixel of an edge lands on it in both tiles; a one-pixel margin
+    # offers it to both neighbours and ST_AsMVTGeom keeps exactly the right ones.
+    margin = 1 / MVT_EXTENT
     size = 2 * WEB_MERCATOR_ORIGIN_SHIFT / 2**z
     last = 2**z - 1
     column = f"(ST_X(clusters.centroid) + {WEB_MERCATOR_ORIGIN_SHIFT}) / {size}"
@@ -529,8 +531,8 @@ def _zoom_tiles(
 
     def candidates(position: str) -> str:
         return (
-            f"generate_series(GREATEST(floor({position} - 1e-6), 0)::int, "
-            f"LEAST(floor({position} + 1e-6), {last})::int)"
+            f"generate_series(GREATEST(floor({position} - {margin}), 0)::int, "
+            f"LEAST(floor({position} + {margin}), {last})::int)"
         )
 
     sql = f"""{clusters_sql} SELECT (SELECT {VERSION_SQL}), placed.tx, placed.ty, {_tile_aggregate()}
