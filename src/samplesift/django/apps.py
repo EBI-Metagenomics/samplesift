@@ -14,3 +14,5 @@ class SamplesiftDjangoConfig(AppConfig):
 
         get_settings()
         autodiscover_modules("samplesift")
+        # Register database checks after collection discovery, without querying in ready().
+        from . import checks  # noqa: F401
