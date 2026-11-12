@@ -51,6 +51,9 @@ jobs:
     uses: ./.github/workflows/test-frontend.yml
 ```
 
+`publish-python.yml` gates PyPI publishing on `test-python.yml` alone; see
+[python-release.md](python-release.md).
+
 The Django job uses a `postgis/postgis:16-3.4` service container on port 55432
 with the `samplesift` credentials, matching `docker-compose.yml`. It installs
 GDAL and GEOS on the runner with apt, because GeoDjango loads those libraries

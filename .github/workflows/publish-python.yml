@@ -1,0 +1,65 @@
+name: Publish Python package
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  test-python:
+    uses: ./.github/workflows/test-python.yml
+
+  build:
+    name: build
+    needs: test-python
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.3.3
+
+      - name: Check release tag matches package version
+        run: |
+          version="$(uv version --short)"
+          if [ "${GITHUB_REF_NAME#v}" != "$version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package version $version"
+            exit 1
+          fi
+
+      - name: Build wheel and source distribution
+        run: uv build
+
+      - name: Upload distributions
+        uses: actions/upload-artifact@v7
+        with:
+          name: python-dist
+          path: dist/
+          if-no-files-found: error
+
+  # Runs only the official action with the OIDC token; no repository code.
+  publish:
+    name: publish to PyPI
+    needs: build
+    runs-on: ubuntu-24.04
+    environment:
+      name: pypi
+      url: https://pypi.org/p/samplesift
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Download distributions
+        uses: actions/download-artifact@v8
+        with:
+          name: python-dist
+          path: dist/
+
+      - name: Publish with Trusted Publishing
+        uses: pypa/gh-action-pypi-publish@v1.14.3
