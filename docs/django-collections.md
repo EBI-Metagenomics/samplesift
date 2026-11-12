@@ -250,7 +250,13 @@ It retains source primary keys in memory for orphan detection.
 It does not lock source records or wrap the entire refresh in one transaction.
 If interrupted, rerun the command.
 Collection writes invalidate existing tiles when cache-version triggers are installed.
-Run `samplesift_sync_schema` afterwards if you also want cache prewarming.
+After each collection refresh, the command prewarms its unfiltered clustered tiles when a cache is configured.
+Only selected spatial collections are warmed.
+Use `--no-warm-cache` to skip prewarming:
+
+```shell
+python manage.py samplesift_sync_content samples --no-warm-cache
+```
 
 ## Verification
 

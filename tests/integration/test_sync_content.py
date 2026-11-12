@@ -170,3 +170,66 @@ def test_empty_source_removes_all_orphans(storage: str) -> None:
     rows.create(source_pk="orphan", label="gone")
     call_command("samplesift_sync_content", "refresh-summary", stdout=StringIO())
     assert not rows.exists()
+
+
+@pytest.mark.parametrize("skip_warm", [False, True])
+def test_content_sync_warms_current_tiles_unless_disabled(
+    storage: str, skip_warm: bool, settings: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from django.core.cache import caches
+
+    from samplesift.django.api import _mvt
+    from samplesift.django.cache import collection_version, tile_key
+
+    settings.CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "content-warm",
+        }
+    }
+    settings.SAMPLESIFT_CLUSTER_MAX_ZOOM = 1
+    cache = caches["default"]
+    cache.clear()
+    monkeypatch.setattr(
+        "samplesift.django.management.commands.samplesift_sync_schema.registry",
+        _registry,
+    )
+    call_command("samplesift_sync_schema", no_warm_cache=True, stdout=StringIO())
+    RefreshSample.objects.bulk_create(
+        [RefreshSample(label="fresh", metadata={"lon": 2, "lat": 58.5})]
+    )
+    output = StringIO()
+    call_command(
+        "samplesift_sync_content",
+        "refresh-samples",
+        no_warm_cache=skip_warm,
+        stdout=output,
+    )
+    version = collection_version(RefreshCollection, storage)
+    assert version is not None
+    cached = cache.get(tile_key(RefreshCollection, version, {}, 0, 0, 0))
+    if skip_warm:
+        assert cached is None
+        assert "Warmed" not in output.getvalue()
+    else:
+        rows = _registry.get_model(RefreshCollection).objects.using(storage).all()
+        assert cached == _mvt(RefreshCollection, rows, 0, 0, 0)
+        assert "tiles for refresh-samples" in output.getvalue()
+        assert "(zoom 0-1)" in output.getvalue()
+
+
+def test_nonspatial_content_sync_skips_warming(
+    storage: str, settings: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from unittest.mock import Mock
+
+    settings.CACHES = {
+        "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}
+    }
+    warm = Mock()
+    monkeypatch.setattr(
+        "samplesift.django.management.commands.samplesift_sync_content.warm_collection",
+        warm,
+    )
+    call_command("samplesift_sync_content", "refresh-summary", stdout=StringIO())
+    warm.assert_not_called()
