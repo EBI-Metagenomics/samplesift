@@ -11,9 +11,9 @@ repos:
     rev: v1.50.0
     hooks:
       - id: djlint-reformat-django
-        files: ^src/samplesift/django/templates/.*\.html$
+        files: ^(src/samplesift/django|examples/[^/]+/[^/]+)/templates/.*\.html$
       - id: djlint-django
-        files: ^src/samplesift/django/templates/.*\.html$
+        files: ^(src/samplesift/django|examples/[^/]+/[^/]+)/templates/.*\.html$
 
   - repo: https://github.com/biomejs/pre-commit
     rev: v2.5.13
