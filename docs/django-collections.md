@@ -279,6 +279,32 @@ registering a spatial collection therefore requires Django's PostgreSQL support
 and its database driver as well as the PostGIS database. Add
 `django.contrib.postgres` to `INSTALLED_APPS` for spatial collections.
 
+## Embedding the explorer
+
+The `samplesift` template tag renders the `<sample-sift>` collection explorer for a
+registered spatial collection. The host project needs `django.contrib.staticfiles`
+and `STATIC_URL`, and must include `api.urls` in its URL configuration.
+
+```django
+{% load samplesift %}
+{% samplesift "occurrences" %}
+{% samplesift "occurrences" page_size=25 filter_mode="manual" id="left" class="explorer" %}
+```
+
+| Argument | Default | Meaning |
+| --- | --- | --- |
+| collection | required | The collection's `api_name`; an unknown name raises `KeyError`. |
+| `page_size` | `SAMPLESIFT_DEFAULT_PAGE_SIZE` | Results per page, capped at `SAMPLESIFT_MAX_PAGE_SIZE`. |
+| `filter_mode` | component default (`auto`) | `auto` applies filters as they change; `manual` adds an Apply step. |
+| `filter_debounce_ms` | component default (500) | Delay before automatic filters apply. |
+| `api_url` | reversed API root | Override when the API is served from another host. |
+| `id`, `class` | none | Copied onto the element. |
+
+The tile layer is the collection's `api_name`. The module script is emitted once per
+template render. The built components are not committed: run
+`npm run build:django --prefix frontend` before building the Python package; it writes
+them to `src/samplesift/django/static/samplesift/components/`.
+
 ## API settings
 
 SampleSift validates these global Django settings at startup. Configure them before
