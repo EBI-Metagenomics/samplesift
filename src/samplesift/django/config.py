@@ -14,6 +14,7 @@ class SampleSiftSettings:
     max_page_size: int
     cluster_radius_pixels: int
     cluster_max_zoom: int
+    cache_timeout: int
 
 
 def get_settings() -> SampleSiftSettings:
@@ -24,6 +25,7 @@ def get_settings() -> SampleSiftSettings:
         "max_page_size": (500, 1),
         "cluster_radius_pixels": (40, 1),
         "cluster_max_zoom": (14, 0),
+        "cache_timeout": (3600, 1),
     }
     values = {}
     for key, (default, minimum) in defaults.items():
@@ -34,4 +36,7 @@ def get_settings() -> SampleSiftSettings:
         values[key] = value
     if values["default_page_size"] > values["max_page_size"]:
         raise ImproperlyConfigured("SAMPLESIFT_DEFAULT_PAGE_SIZE must not exceed SAMPLESIFT_MAX_PAGE_SIZE.")
+    alias = getattr(settings, "SAMPLESIFT_CACHE_ALIAS", None)
+    if alias is not None and (not isinstance(alias, str) or alias not in settings.CACHES):
+        raise ImproperlyConfigured("SAMPLESIFT_CACHE_ALIAS must name a configured cache.")
     return SampleSiftSettings(**values)

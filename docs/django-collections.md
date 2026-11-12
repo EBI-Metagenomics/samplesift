@@ -115,7 +115,10 @@ python manage.py samplesift_sync_schema
 ```
 
 The command enables the `postgis` extension and creates missing registered
-collection tables. It reports missing, extra, type-incompatible, or
+collection tables. For spatial collections it also installs the write-version table
+and triggers used by the tile cache. When a cache is configured, it then prewarms
+the cache with unfiltered tiles; pass `--no-warm-cache` to skip this (see
+[Tile caching](tile-cache.md)). It reports missing, extra, type-incompatible, or
 nullability-incompatible columns as schema drift, including point geometry subtype and SRID. It does not alter or drop
 existing tables. The database user therefore needs permission to create the
 PostGIS extension.
@@ -290,8 +293,34 @@ standard API behavior.
 | `SAMPLESIFT_MAX_PAGE_SIZE` | 500 | Positive integer |
 | `SAMPLESIFT_CLUSTER_RADIUS_PIXELS` | 40 | Positive integer |
 | `SAMPLESIFT_CLUSTER_MAX_ZOOM` | 14 | Non-negative integer |
+| `SAMPLESIFT_CACHE_ALIAS` | `default` when explicitly configured | Name of a configured Django cache |
+| `SAMPLESIFT_CACHE_TIMEOUT` | 3600 | Positive integer, in seconds |
 
 Filter depth starts at zero; the node limit counts all objects, arrays, and
 scalar values in the expression. The clustering radius is measured in pixels;
 clustering applies through the configured maximum zoom, inclusive. Increasing
 filter or page limits can increase resource use.
+
+Vector tiles are cached only when the application explicitly configures Django's
+`CACHES` setting, or selects a cache with `SAMPLESIFT_CACHE_ALIAS`. The cache
+includes both clustered and individual-point tiles. A tile cached at request time
+expires `SAMPLESIFT_CACHE_TIMEOUT` seconds after it is stored and is then recomputed
+on its next request. Use a shared cache backend when running multiple workers,
+since local-memory caches are per process.
+
+Cache keys contain the collection's version: the time of the last write to its
+table, which a database trigger records. Any write changes the version and makes
+earlier tiles unreachable, including `QuerySet.update()`, raw SQL, and bulk loads.
+`samplesift_sync_schema` installs the trigger. Until it has run, tiles are not
+cached. Cache entries are bypassed while the collection database connection is
+inside a transaction.
+
+`samplesift_sync_schema` also prewarms the clustered zooms (0 to
+`SAMPLESIFT_CLUSTER_MAX_ZOOM`) for the unfiltered query. Prewarmed tiles never expire,
+so configure the cache backend to evict entries when it is full. Run the command
+again after loading data to warm the new version.
+[Tile caching](tile-cache.md) explains the keys, invalidation, and prewarming in
+detail.
+
+The [OBIS example](../examples/obis/README.md#tile-caching) configures Django's
+Redis cache in Docker Compose and shows how to inspect cached tile keys.

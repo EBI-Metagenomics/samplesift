@@ -12,6 +12,15 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+  redis:
+    image: redis:7-alpine
+    # Prewarmed tiles never expire; evict the least recently used keys instead.
+    command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
   app:
     build:
       context: ../..
@@ -19,9 +28,12 @@ services:
     environment:
       POSTGRES_HOST: db
       POSTGRES_PORT: "5432"
+      REDIS_URL: "${REDIS_URL:-redis://redis:6379/0}"
       DJANGO_ALLOWED_HOSTS: "${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,[::1],172.16.14.165}"
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     ports:
       - "8001:8000"
