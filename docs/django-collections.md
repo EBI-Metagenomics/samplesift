@@ -91,6 +91,43 @@ class SampleCollection(SampleSiftCollection):
 value is `None`. `prepare_<property_name>(source_instance)` takes precedence
 over `attr`; a property must define one of them.
 
+### JSON metadata properties
+
+Use a typed `Property` with a `prepare_<property_name>()` method for JSONB values.
+For example, extract `lat` from a source model's `metadata` JSONField:
+
+```python
+from django.db import models
+from samplesift.django import Property, SampleSiftCollection, registry
+
+from .models import Sample
+
+
+@registry.register
+class SampleCollection(SampleSiftCollection):
+    fields = ["species_name"]
+    lat = Property(models.FloatField(null=True))
+
+    class Meta:
+        model = Sample
+
+    @staticmethod
+    def prepare_lat(sample):
+        value = (sample.metadata or {}).get("lat")
+        return None if value is None else float(value)
+```
+
+This example expects a JSON object with a numeric or null `lat` value.
+A missing key produces `None`.
+SampleSift stores the result in a typed, filterable collection column.
+Keep `lat` outside `fields`; that list contains actual source-model fields.
+
+`attr="metadata__lat"` does not support dictionary keys.
+The current traversal uses Python attributes through `getattr()`.
+
+`Point(longitude=..., latitude=...)` currently requires numeric source-model fields.
+Computed `Property` values cannot supply geometry coordinates.
+
 ## Storage and schema setup
 
 Collection storage uses `SAMPLESIFT_DATABASE_ALIAS`, defaulting to Django's
