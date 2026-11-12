@@ -224,7 +224,12 @@ test('removing and reconnecting an instance preserves state and recreates one us
 });
 
 test('map workers load from Vite when embedded on a notebook origin', async ({ page }) => {
-  const host = createServer((_request, response) => {
+  const host = createServer((request, response) => {
+    if (request.url?.startsWith('/tiles/')) {
+      response.setHeader('Content-Type', 'application/vnd.mapbox-vector-tile');
+      response.end(Buffer.alloc(0));
+      return;
+    }
     response.setHeader('Content-Type', 'text/html');
     response.end('<!doctype html><html><body></body></html>');
   });
@@ -261,6 +266,36 @@ test('map workers load from Vite when embedded on a notebook origin', async ({ p
       return map?.getSource('samplesift-samples')
         ? map.querySourceFeatures('samplesift-samples').length : 0;
     })).toBeGreaterThan(0);
+    await page.evaluate((base) => {
+      const events: Array<{ loading: boolean; ready: boolean }> = [];
+      (window as Window & { tileEvents: typeof events }).tileEvents = events;
+      const map = document.querySelector('sample-sift-map') as HTMLElement & {
+        tileSource: import('../src/collection/tiles').CollectionTileSource;
+      };
+      map.addEventListener('collectiontileschange', event => events.push((event as CustomEvent).detail));
+      map.tileSource = { urlTemplate: `${base}/tiles/{z}/{x}/{y}`, sourceLayer: 'occurrences', body: {} };
+    }, origin);
+    await expect.poll(() => page.evaluate(() => (
+      window as Window & { tileEvents: Array<{ loading: boolean }> }
+    ).tileEvents.some(event => event.loading))).toBe(true);
+    await expect.poll(() => page.evaluate(() => (
+      window as Window & { tileEvents: Array<{ ready: boolean }> }
+    ).tileEvents.some(event => event.ready))).toBe(true);
+    await page.evaluate(() => {
+      const form = document.createElement('sample-sift-collection-filter-form') as HTMLElement & {
+        metadata: import('../src/collection/types').CollectionMetadata;
+      };
+      form.metadata = {
+        fields: [{ name: 'depth', kind: 'number', nullable: true, operators: ['=', '>=', '<=', 'isNull'] }],
+        sortValues: [], defaultLimit: 25, maxLimit: 500, resultColumns: [], queryablesSchema: {}, diagnostics: [],
+      };
+      document.body.append(form);
+    });
+    await expect(page.locator('sample-sift-collection-filter-form gui-grid-layout').first()).toBeAttached();
+    await expect(page.locator('sample-sift-collection-filter-form').getByRole('button', { name: 'Apply filters', exact: true })).toBeVisible();
+    await page.locator('sample-sift-collection-filter-form').getByLabel('Depth: condition', { exact: true }).selectOption('>=');
+    await expect(page.locator('sample-sift-collection-filter-form').getByLabel('Depth: value', { exact: true })).toBeVisible();
+    await expect(page.locator('sample-sift-collection-filter-form .error[role="alert"]')).toHaveCount(0);
     expect(wrongOriginRequests).toEqual([]);
   } finally {
     await new Promise<void>((resolve, reject) => host.close(error => error ? reject(error) : resolve()));

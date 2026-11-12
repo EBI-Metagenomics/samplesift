@@ -110,7 +110,8 @@ tasks:
   jupyter:test:
     desc: Test the optional Jupyter wrapper
     cmds:
-      - uv run --locked --extra jupyter pytest -p no:django tests/test_jupyter.py {{.CLI_ARGS}}
+      - uv run --locked --extra jupyter --group notebook pytest -p no:django tests/test_jupyter.py {{.CLI_ARGS}}
+      - node --test tests/jupyter-widget.test.mjs
 
   build:
     desc: Build the Python wheel and source distribution

@@ -10,3 +10,4 @@ frontend/**/dist/
 
 .mi/
 .ipynb_checkpoints/
+examples/selected-occurrences.csv

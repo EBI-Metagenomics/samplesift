@@ -181,6 +181,7 @@ Public integration events bubble across Shadow DOM:
 | `collectionready` | `{ metadata }` after capability loading. |
 | `collectionstatechange` | `{ state }` for valid user commits, region changes, and sorting. |
 | `collectionresultschange` | `{ state, query, result }` for a successful current page request. |
+| `collectiontileschange` | `{ loading, pending, error, revision, ready, query }` for map tile status changes; no tile bytes or result rows. |
 | `selectionchange` | `{ geometry }` for user region actions. |
 | `featureclick` | `{ id, properties, geometry }` for a singleton or selected table record. |
 | `searcherror` | `{ message }` for discovery/search failures. |

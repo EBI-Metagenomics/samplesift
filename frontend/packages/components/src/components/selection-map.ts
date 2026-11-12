@@ -172,9 +172,12 @@ export class SampleSiftMap extends LitElement {
   private _tileRenderError = '';
   private _tilesRendering = false;
   private _hasLoadedTiles = false;
+  private _tileRevision = 0;
+  private _tileStatusSnapshot = '';
   private _tileLoader = createCollectionTileLoader(this._tileProtocol, globalThis.fetch, {
     requestDelayMs: 150,
     onStatus: (status) => {
+      this._tileRevision = status.revision;
       this._tilePending = status.pending;
       this._tileRequestError = status.error ?? '';
     },
@@ -220,6 +223,24 @@ export class SampleSiftMap extends LitElement {
       if (this._draw?.enabled && this._mode !== 'select') this.setMode('select');
       this._updateSelection();
     }
+    this.emitTileStatus();
+  }
+
+  private emitTileStatus(): void {
+    if (!this.tileSource && !this._tileStatusSnapshot) return;
+    const loading = Boolean(this.tileSource && (this._tilePending > 0 || this._tilesRendering));
+    const error = this._tileRequestError || this._tileRenderError || null;
+    const detail = {
+      loading, pending: this._tilePending, error, revision: this._tileRevision,
+      ready: Boolean(this.tileSource && this._hasLoadedTiles && !loading && !error),
+      query: this.tileSource?.body ?? null,
+    };
+    const snapshot = JSON.stringify(detail);
+    if (snapshot === this._tileStatusSnapshot) return;
+    this._tileStatusSnapshot = snapshot;
+    this.dispatchEvent(new CustomEvent('collectiontileschange', {
+      detail: structuredClone(detail), bubbles: true, composed: true,
+    }));
   }
 
   /** Switch tools without changing the current committed selection. */
