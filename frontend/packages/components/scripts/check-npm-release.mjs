@@ -6,28 +6,30 @@ const PACKAGE_NAME = '@microbiome-informatics/samplesift';
 // npm releases use SemVer without build metadata, which npm can normalize away.
 const RELEASE_VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
 
-/** Validate the npm release independently of the Python package version. */
-export function validateNpmRelease({ manifest, lockfile, tag, prerelease }) {
+/** Validate the npm side of a shared v<version> release for Python and npm. */
+export function validateNpmRelease({ manifest, lockfile, tag, prerelease, pythonVersion }) {
   if (manifest?.name !== PACKAGE_NAME || manifest.private === true) {
     throw new Error(`Release package must be the public ${PACKAGE_NAME} package.`);
   }
   const version = manifest.version;
   const match = typeof version === 'string' && version.length <= 256 && RELEASE_VERSION.exec(version);
-  if (!match || match.slice(1, 4).some(value => !Number.isSafeInteger(Number(value)))
-    || match[4]?.split('.').some(value => /^0\d+$/.test(value))) {
-    throw new Error('Package version must be strict SemVer without build metadata or leading zeroes.');
+  if (!match || match.slice(1, 4).some(value => !Number.isSafeInteger(Number(value)))) {
+    throw new Error('Package version must be a stable X.Y.Z version without leading zeroes.');
   }
   const locked = lockfile?.packages?.['packages/components'];
   if (locked?.name !== PACKAGE_NAME || locked.version !== version) {
     throw new Error('The component name and version must match frontend/package-lock.json.');
   }
-  if (tag !== `npm-v${version}`) {
-    throw new Error(`npm release tag must be npm-v${version}.`);
+  if (pythonVersion !== version) {
+    throw new Error('Python and npm versions must match for a shared release.');
   }
-  if (typeof prerelease !== 'boolean' || prerelease !== Boolean(match[4])) {
-    throw new Error('The GitHub prerelease flag must agree with the package SemVer prerelease suffix.');
+  if (tag !== `v${version}`) {
+    throw new Error(`release tag must be v${version}.`);
   }
-  return { version, distTag: prerelease ? 'next' : 'latest' };
+  if (prerelease !== false) {
+    throw new Error('GitHub prereleases are not supported; publish a stable release.');
+  }
+  return { version, distTag: 'latest' };
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
@@ -42,6 +44,7 @@ if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.m
       lockfile,
       tag: process.env.RELEASE_TAG,
       prerelease: releaseFlag === 'true' ? true : releaseFlag === 'false' ? false : undefined,
+      pythonVersion: process.env.PYTHON_VERSION,
     });
     if (process.env.GITHUB_OUTPUT) {
       await appendFile(process.env.GITHUB_OUTPUT, `version=${result.version}\ndist_tag=${result.distTag}\n`);

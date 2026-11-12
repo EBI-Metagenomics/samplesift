@@ -158,6 +158,36 @@ separate configured database) and run:
 python manage.py samplesift_sync_schema
 ```
 
+### Startup checks
+
+`python manage.py runserver` checks registered collection tables before serving requests.
+Missing tables produce `samplesift.E001`, with the database alias, table names, and setup command:
+
+```text
+SampleSift collection tables are missing: samplesift_sample_collection
+HINT: Run python manage.py samplesift_sync_schema before starting the server.
+```
+
+Database connection or configuration failures produce `samplesift.E002`.
+The check uses `SAMPLESIFT_DATABASE_ALIAS`, or `default` when unset.
+It checks table existence, not schema drift or cache triggers.
+Use `samplesift_sync_schema` for full schema validation.
+
+Migration, schema setup, and other management commands remain usable before collection tables exist.
+The OBIS demo already runs schema setup before its server starts.
+
+Gunicorn and Uvicorn do not run Django's system checks automatically.
+Include this check in their startup script before the server command:
+
+```shell
+python manage.py check --deploy --tag database
+```
+
+Stop startup if that command fails.
+Django application initialisation alone does not query collection storage.
+
+### Schema validation and cache setup
+
 The command enables the `postgis` extension and creates missing registered
 collection tables. For spatial collections it also installs the write-version table
 and triggers used by the tile cache. When a cache is configured, it then prewarms

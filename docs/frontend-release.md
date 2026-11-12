@@ -21,7 +21,7 @@ The npm organization is `microbiome-informatics`. The GitHub repository remains
 `EBI-Metagenomics/samplesift`, so trusted publisher settings must use
 `EBI-Metagenomics` as the GitHub owner.
 
-## Independent versions and release tags
+## Shared versions and release tag
 
 | Distribution | Version source | GitHub release tag | Publisher |
 | --- | --- | --- | --- |
@@ -42,8 +42,8 @@ zeroes and build metadata (`+...`). Every stable npm publication updates npm's
 `latest` dist-tag, independently of GitHub's latest-release flag.
 
 The Python distribution bundles the frontend built from its own release commit;
-it does not download the npm package. An npm release does not update an existing
-Python wheel. Release a new Python version when its bundled UI needs updating.
+it does not download the npm package. Existing Python wheels are not updated;
+each shared release publishes a new Python version with that release's UI.
 Both builds include `build-info.json` beside the JavaScript, recording the frontend
 package name, version, source revision and whether the checkout was dirty. Git
 fields are null when the build has no Git metadata. This records what was bundled;
@@ -69,7 +69,8 @@ a remote service or local tunnel need not be running the checkout under test.
 
 ## Publishing workflow
 
-1. Validate the npm tag, package name/version, workspace lockfile and prerelease flag.
+1. Validate the tag, package name/version, workspace lockfile, matching Python
+   version and that the release is not a prerelease.
 2. Call `test-frontend.yml` with `release_checks: true`: release-validator tests,
    TypeScript, unit tests, lint, browser tests, both asset builds and archive checks.
 3. Build and check a fresh npm archive. Upload that single `.tgz` with its SHA-256
@@ -90,7 +91,7 @@ wheel and source archive. See [python-release.md](python-release.md).
 - Sign in with an npm account authorized to publish
   `@microbiome-informatics/samplesift`. npm and PyPI ownership are separate.
 - Create the GitHub environment `npm`, add required reviewers and restrict
-  deployment to tags matching `npm-v*`.
+  deployment to tags matching `v*`.
 - On the npm package, configure a GitHub Actions trusted publisher with owner
   `EBI-Metagenomics`, repository `samplesift`, workflow `publish-npm.yml` and
   environment `npm`. These values must match exactly. Enable **direct publishing**
@@ -103,7 +104,7 @@ For the first release, an authorized npm maintainer therefore needs to publish
 the approved archive using npm's interactive authentication, then configure the
 trusted publisher for later versions. Do not add a long-lived token fallback to
 this workflow or store tokens in the repository. A first manual publication must
-not be followed by a published `npm-v` GitHub release of the same version: that
+not be followed by a published `v` GitHub release of the same version: that
 would try to upload it again. Keep a Git tag if desired and use the workflow for
 the next version.
 
@@ -225,14 +226,15 @@ explicitly enabled, and check its static assets in a browser.
 
 For an established package with Trusted Publishing configured:
 
-1. Update only the frontend version, for example from `frontend/` with
-   `npm version 0.2.0 --workspace @microbiome-informatics/samplesift --no-git-tag-version`.
-   Commit both the component manifest and updated workspace lockfile after the
-   checks above pass. Do not change `pyproject.toml` for an npm-only release.
-2. Merge the approved changes, then publish a GitHub release tagged `npm-v0.2.0`
-   at that exact revision. For a preview, use matching SemVer such as
-   `npm-v0.2.0-beta.1` and check GitHub's prerelease box.
-3. Review the workflow's checks and approve the `npm` deployment environment.
+1. Bump both versions together. From `frontend/`, run
+   `npm version 0.2.0 --workspace @samplesift/components --no-git-tag-version`;
+   from the repository root, run `uv version 0.2.0`. Commit the component
+   manifest, workspace lockfile, `pyproject.toml` and `uv.lock` after the checks
+   above pass.
+2. Merge the approved changes, then publish a stable GitHub release tagged `v0.2.0`
+   at that exact revision. This starts both the PyPI and npm publishers.
+3. Review both workflows' checks and approve the `pypi` and `npm` deployment
+   environments.
 
 For the initial manual bootstrap described above, publish the **approved archive**,
 not a newly built directory. With its actual path and the appropriate dist-tag:

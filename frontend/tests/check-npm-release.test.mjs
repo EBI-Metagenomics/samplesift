@@ -12,41 +12,38 @@ function release(version = '0.1.0') {
   return {
     manifest: { name: packageName, version },
     lockfile: { packages: { 'packages/components': { name: packageName, version } } },
-    tag: `npm-v${version}`,
-    prerelease: version.includes('-'),
+    tag: `v${version}`,
+    prerelease: false,
+    pythonVersion: version,
   };
 }
 
-test('npm stable release is independent of the Python version', () => {
-  const input = release('2.3.4');
-  input.pythonVersion = '0.1.0';
-  assert.deepEqual(validateNpmRelease(input), { version: '2.3.4', distTag: 'latest' });
+test('stable shared release publishes to latest', () => {
+  assert.deepEqual(validateNpmRelease(release('2.3.4')), { version: '2.3.4', distTag: 'latest' });
 });
 
-test('SemVer prereleases go only to next', () => {
-  for (const version of ['0.2.0-beta.1', '1.0.0-0', '1.0.0-rc.01a']) {
-    assert.deepEqual(validateNpmRelease(release(version)), { version, distTag: 'next' });
+test('reject a Python version that differs from the npm version', () => {
+  for (const pythonVersion of ['0.1.1', '0.1', '', undefined]) {
+    assert.throws(() => validateNpmRelease({ ...release(), pythonVersion }), /versions must match/);
   }
 });
 
-test('Python, bare, unrelated, missing and mismatched tags cannot publish npm', () => {
-  for (const tag of ['v0.1.0', '0.1.0', 'other-v0.1.0', 'npm-v0.2.0', 'npm-v0.1.0\n', undefined]) {
-    assert.throws(() => validateNpmRelease({ ...release(), tag }), /npm release tag must/);
+test('npm-prefixed, bare, unrelated, missing and mismatched tags cannot publish', () => {
+  for (const tag of ['npm-v0.1.0', '0.1.0', 'other-v0.1.0', 'v0.2.0', 'v0.1.0\n', undefined]) {
+    assert.throws(() => validateNpmRelease({ ...release(), tag }), /release tag must/);
   }
 });
 
-test('reject invalid or ambiguous npm versions before producing outputs', () => {
-  for (const version of ['v1.2.3', '1.2', '01.2.3', '1.02.3', '1.2.03', '1.2.3-01', '1.2.3-rc.01',
-    '1.2.3-', '1.2.3-rc..1', '1.2.3-rc_1', '1.2.3+build.1', '9007199254740992.0.0', '1.2.3\n']) {
-    assert.throws(() => validateNpmRelease(release(version)), /strict SemVer/);
+test('reject prerelease, invalid or ambiguous versions before producing outputs', () => {
+  for (const version of ['v1.2.3', '1.2', '01.2.3', '1.02.3', '1.2.03', '1.2.3-beta.1', '1.0.0-0',
+    '1.2.3-', '1.2.3+build.1', '9007199254740992.0.0', '1.2.3\n']) {
+    assert.throws(() => validateNpmRelease(release(version)), /stable X\.Y\.Z/);
   }
 });
 
-test('reject both directions of a GitHub prerelease flag mismatch', () => {
-  assert.throws(() => validateNpmRelease({ ...release(), prerelease: true }), /prerelease flag/);
-  assert.throws(() => validateNpmRelease({ ...release('1.0.0-rc.1'), prerelease: false }), /prerelease flag/);
-  for (const prerelease of ['false', 'true', undefined]) {
-    assert.throws(() => validateNpmRelease({ ...release(), prerelease }), /prerelease flag/);
+test('reject GitHub prereleases and malformed prerelease flags', () => {
+  for (const prerelease of [true, 'false', 'true', undefined]) {
+    assert.throws(() => validateNpmRelease({ ...release(), prerelease }), /prereleases are not supported/);
   }
 });
 
@@ -68,13 +65,12 @@ test('CLI checks the real package and writes bounded GitHub outputs', async () =
   const directory = await mkdtemp(join(tmpdir(), 'samplesift-release-check-'));
   const output = join(directory, 'output');
   try {
-    const prerelease = manifest.version.includes('-');
     const result = spawnSync(process.execPath, [fileURLToPath(new URL('../packages/components/scripts/check-npm-release.mjs', import.meta.url))], {
       encoding: 'utf8',
-      env: { ...process.env, RELEASE_TAG: `npm-v${manifest.version}`, RELEASE_PRERELEASE: String(prerelease), GITHUB_OUTPUT: output },
+      env: { ...process.env, RELEASE_TAG: `v${manifest.version}`, RELEASE_PRERELEASE: 'false', PYTHON_VERSION: manifest.version, GITHUB_OUTPUT: output },
     });
     assert.equal(result.status, 0, result.stderr);
-    assert.equal(await readFile(output, 'utf8'), `version=${manifest.version}\ndist_tag=${prerelease ? 'next' : 'latest'}\n`);
+    assert.equal(await readFile(output, 'utf8'), `version=${manifest.version}\ndist_tag=latest\n`);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
