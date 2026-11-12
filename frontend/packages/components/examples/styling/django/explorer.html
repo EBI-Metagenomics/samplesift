@@ -11,12 +11,24 @@
   <body>
     <main class="sample-theme">
       <h1>Explore samples</h1>
+      {% if samplesift_show_table %}
       <sample-sift
         api-url="/samplesift"
         collection="occurrences"
         tile-layer="occurrences"
+        layout="{{ samplesift_layout|default:'compact' }}"
+        show-table
         page-size="25"
       ></sample-sift>
+      {% else %}
+      <sample-sift
+        api-url="/samplesift"
+        collection="occurrences"
+        tile-layer="occurrences"
+        layout="{{ samplesift_layout|default:'compact' }}"
+        page-size="25"
+      ></sample-sift>
+      {% endif %}
     </main>
   </body>
 </html>
