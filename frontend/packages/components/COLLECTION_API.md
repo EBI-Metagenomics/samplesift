@@ -68,6 +68,9 @@ The map and table stay visible while a new search loads. A failed result request
 
 Hosts that explicitly prefer automatic updates can set `filterMode = 'auto'` (or `filter-mode="auto"`) and optionally `filterDebounceMs` (or `filter-debounce-ms`). Valid edits then commit after that many milliseconds; manual mode is the default on both public elements. Drafts never emit `collectionstatechange` or change host URL state.
 
+Applied-filter chips can focus their condition control, remove that field, or clear all scalar filters.
+These actions preserve the selected map region.
+
 The direct element's public state has this shape (use `setCollectionState()` on the wrapper):
 
 ```js
