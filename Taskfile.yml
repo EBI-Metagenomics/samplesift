@@ -1,0 +1,108 @@
+version: '3'
+
+vars:
+  BACKEND_COMPOSE: docker compose --project-name samplesift-ui-dev -f examples/obis/compose.yml -f examples/obis/compose.dev.yml
+
+tasks:
+  dev:
+    desc: Start the local OBIS backend and frontend; stop the backend on exit
+    cmds:
+      - defer:
+          task: backend:down
+      - task: backend:up
+      - task: frontend:dev
+        vars:
+          SAMPLESIFT_API_TARGET: 'http://127.0.0.1:{{.SAMPLESIFT_BACKEND_PORT | default "8002"}}'
+
+  backend:dev:
+    desc: Start the local OBIS backend with logs and Django reload support
+    cmds:
+      - '{{.BACKEND_COMPOSE}} up --build {{.CLI_ARGS}}'
+
+  backend:up:
+    desc: Start the local OBIS backend in the background and wait for readiness
+    cmds:
+      - '{{.BACKEND_COMPOSE}} up --build --detach --wait --wait-timeout 300'
+
+  backend:down:
+    desc: Stop the local OBIS backend; preserve its database volume
+    cmds:
+      - '{{.BACKEND_COMPOSE}} down'
+
+  backend:logs:
+    desc: Follow local OBIS backend logs
+    cmds:
+      - '{{.BACKEND_COMPOSE}} logs --follow {{.CLI_ARGS}}'
+
+  frontend:setup:
+    desc: Install frontend dependencies from the npm lockfile
+    dir: frontend
+    cmds:
+      - npm ci {{.CLI_ARGS}}
+
+  frontend:dev:
+    desc: Start the frontend development server
+    dir: frontend
+    env:
+      SAMPLESIFT_API_TARGET: '{{.SAMPLESIFT_API_TARGET | default "http://127.0.0.1:8002"}}'
+    cmds:
+      - npm run dev --workspace @samplesift/components -- {{.CLI_ARGS}}
+
+  frontend:build:
+    desc: Build the frontend package and TypeScript declarations
+    dir: frontend
+    cmds:
+      - npm run build --workspace @samplesift/components -- {{.CLI_ARGS}}
+
+  frontend:preview:
+    desc: Serve the built frontend package
+    dir: frontend
+    cmds:
+      - npm run preview --workspace @samplesift/components -- {{.CLI_ARGS}}
+
+  frontend:lint:
+    desc: Lint the frontend workspace
+    dir: frontend
+    cmds:
+      - npm run lint -- {{.CLI_ARGS}}
+
+  frontend:typecheck:
+    desc: Check frontend TypeScript types
+    dir: frontend
+    cmds:
+      - npm run typecheck --workspace @samplesift/components -- {{.CLI_ARGS}}
+
+  frontend:test:
+    desc: Run frontend unit tests
+    dir: frontend
+    cmds:
+      - npm run test --workspace @samplesift/components -- {{.CLI_ARGS}}
+
+  frontend:browser:setup:
+    desc: Install Chromium for Playwright tests
+    dir: frontend
+    cmds:
+      - npm exec --workspace @samplesift/components -- playwright install chromium {{.CLI_ARGS}}
+
+  frontend:test:browser:
+    desc: Run Playwright browser tests
+    dir: frontend
+    cmds:
+      - npm run test:browser --workspace @samplesift/components -- {{.CLI_ARGS}}
+
+  frontend:check:
+    desc: Run frontend lint, TypeScript checks, and unit tests
+    cmds:
+      - task: frontend:lint
+      - task: frontend:typecheck
+      - task: frontend:test
+
+  hooks:install:
+    desc: Install the Git pre-commit hook
+    cmds:
+      - uv run --locked pre-commit install
+
+  lint:
+    desc: Run all pinned pre-commit checks
+    cmds:
+      - uv run --locked pre-commit run --all-files {{.CLI_ARGS}}

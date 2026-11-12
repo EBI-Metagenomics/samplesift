@@ -155,3 +155,9 @@ Future Python integrations are exposed as extras when implemented, for example
 
 A self-contained Django and PostGIS example with an OBIS fixture is available in
 [examples/obis/README.md](examples/obis/README.md).
+
+## Development checks
+
+Run `task hooks:install` after dependency setup.
+Run `task lint` for all pinned checks.
+See [development checks](docs/development.md) for details.
