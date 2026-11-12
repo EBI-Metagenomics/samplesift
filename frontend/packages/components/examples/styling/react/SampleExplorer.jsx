@@ -6,6 +6,8 @@ export function SampleExplorer({
   apiUrl = '/samplesift',
   collection = 'occurrences',
   tileLayer = 'occurrences',
+  layout = 'compact',
+  showTable = false,
 }) {
   return (
     <div className="sample-theme">
@@ -13,6 +15,8 @@ export function SampleExplorer({
         api-url={apiUrl}
         collection={collection}
         tile-layer={tileLayer}
+        layout={layout}
+        show-table={showTable ? '' : undefined}
         page-size="25"
       />
     </div>

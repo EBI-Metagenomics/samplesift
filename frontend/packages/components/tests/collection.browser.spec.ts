@@ -373,7 +373,11 @@ test('zoom fetches higher tile coordinates with the same filter and replaces low
     return route.fulfill({ contentType: 'application/vnd.mapbox-vector-tile', body: zoomTiles.get(coordinates) ?? Buffer.alloc(0) });
   });
   await configureTileFixture(first, queries, 4);
-  await first.locator('sample-sift-map').evaluate((element: TileTestMap) => element._map.jumpTo({ center: [0, 0], zoom: 0 }));
+  await first.locator('sample-sift-map').evaluate((element: TileTestMap) => {
+    // This fixture has a z0 tile; allow that exact zoom instead of the UI's 0.7 minimum.
+    element._map.setMinZoom(0);
+    element._map.jumpTo({ center: [0, 0], zoom: 0 });
+  });
   await applyDepth(first, '50');
   await expect(first.getByTestId('collection-count')).toHaveText('5 records');
   await expect.poll(() => zoomRequests.some(request => request.z === 0)).toBe(true);

@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SampleSift · Compact embeds</title>
+<style>body{font:14px/1.5 system-ui;margin:24px;color:#234033;background:#f3f5ef}.embed{max-width:900px;margin:24px 0;min-width:0}h1{font-size:24px}a{color:#16674f}</style></head>
+<body><a href="/">← Main explorer</a><h1>Compact explorers</h1>
+<p>Compact is the default. Filters open inside the card. Add <code>show-table</code> to an explorer to enable its Results panel, or <code>layout="full" show-table</code> for the expanded view.</p>
+<section class="embed"><h2>First collection</h2><sample-sift id="first" api-url="/samplesift" collection="occurrences" tile-layer="occurrences" page-size="2"></sample-sift></section>
+<section class="embed"><h2>Independent collection</h2><sample-sift id="second" api-url="/samplesift" collection="occurrences" tile-layer="occurrences" page-size="2"></sample-sift></section>
+<script type="module">
+import '../src/index.ts';
+for (const explorer of document.querySelectorAll('sample-sift')) {
+  explorer.mapStyle = { version: 8, sources: {}, layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#e8eee3' } }] };
+  explorer.collectionOptions = { baseUrl: '/samplesift', collection: 'occurrences', tiles: { sourceLayer: 'occurrences' } };
+}
+</script></body></html>

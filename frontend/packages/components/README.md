@@ -20,7 +20,7 @@ npm run test:browser
 
 If Chrome is already installed, `PLAYWRIGHT_CHANNEL=chrome npm run test:browser` can use it instead of downloading Chromium. These are verification commands, not a claim that they have been run in your environment.
 
-The target is the backend origin; the development proxy keeps browser API requests on `/samplesift`. The main `/` demo uses the `occurrences` collection. `/demo/collection-url.html` demonstrates two collection widgets with host-owned URLs. The synthetic legacy demo is at `/demo/legacy.html`; `/demo/contract.html` and `/demo/url-state.html` retain the legacy integration examples. Those synthetic pages also work with plain `npm run dev` and no backend target. See [the proxy guidance](COLLECTION_API.md#development-proxy-and-limits) for production and CORS considerations.
+The target is the backend origin; the development proxy keeps browser API requests on `/samplesift`. The main `/` demo uses the `occurrences` collection. `/demo/compact.html` shows two independent compact embeds. `/demo/collection-url.html` demonstrates two collection widgets with host-owned URLs. The synthetic legacy demo is at `/demo/legacy.html`; `/demo/contract.html` and `/demo/url-state.html` retain the legacy integration examples. Those synthetic pages also work with plain `npm run dev` and no backend target. See [the proxy guidance](COLLECTION_API.md#development-proxy-and-limits) for production and CORS considerations.
 
 `npm run build` checks TypeScript and writes ES modules, declarations, and worker assets to `packages/components/dist/`. Run `npm run preview` and open `/embed.html` to inspect a plain HTML consumer of the build.
 
@@ -37,9 +37,29 @@ Filters use a searchable **Add filter** picker with compact field cards, inclusi
 
 Use `collectionState`, silent `setCollectionState(state)`, `collectionMetadata`, and `collectionPaused` for host integration. Collection events and pure URL helpers are documented in [COLLECTION_API.md](COLLECTION_API.md). The host owns optional URL synchronization. The direct `<sample-sift-collection>` element exposes the same explorer without the legacy wrapper.
 
+## Compact and full layouts
+
+The default is a compact, map-first card with the filters closed and no results table. Open **Filters** to edit the search; collection filters still require **Apply filters**. The map, draft edits and table page are preserved while panels open or close. A summary keeps applied filters and search feedback visible.
+
+The table is a separate host opt-in in both layouts:
+
+```html
+<!-- Compact map, with an optional Results panel (initially closed). -->
+<sample-sift api-url="/samplesift" collection="occurrences" tile-layer="occurrences" show-table></sample-sift>
+
+<!-- Full layout with a filter sidebar and the table inline. -->
+<sample-sift api-url="/samplesift" collection="occurrences" tile-layer="occurrences" layout="full" show-table></sample-sift>
+```
+
+`layout` accepts `'compact'` (default) or `'full'`. `showTable` defaults to `false` and maps to the boolean `show-table` attribute. Remove the attribute or assign `element.showTable = false` to disable the table: `show-table="false"` still enables it because the attribute is present. `layout="full"` alone does not enable the table. Hosts migrating from the previous always-expanded display should set both `layout="full"` and `show-table`.
+
+Compact mode is 480px tall by default, with a 360px minimum. Set `--samplesift-compact-height` to size the entire card; its panels scroll internally and adapt to the component's width. `--samplesift-map-height` sizes the map in full layout. Filters and Results open one at a time; Escape or a close button closes the panel and returns focus to its toggle. Layer controls remain on the map.
+
+The same `layout` and `showTable` properties work on `<sample-sift>` and `<sample-sift-collection>`. They affect presentation only. The collection results endpoint is still queried for result counts and state even when the table is disabled; the API has no separate count-only endpoint. Layout choices do not alter filters or host URL state.
+
 ## Styling and framework examples
 
-Use CSS variables for the theme and named CSS parts for individual controls. The default appearance is unchanged. See the [styling guide](STYLING.md) for the supported hooks and simple React and Django template examples. For an app using Visual Framework 2, see the [EBI Visual Framework React example](examples/styling/react-vf/README.md).
+Use CSS variables for the theme and named CSS parts for individual controls. The existing colours and typography remain the defaults in both layouts. See the [styling guide](STYLING.md) for the supported hooks and simple React and Django template examples. For an app using Visual Framework 2, see the [EBI Visual Framework React example](examples/styling/react-vf/README.md).
 
 ## Map backgrounds and environmental layers
 
