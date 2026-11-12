@@ -45,3 +45,7 @@ jobs:
       - name: Lint with Biome
         run: uv run pre-commit run biome-lint --all-files
 
+      - name: Lint Django templates with djLint
+        run: |
+          uv run pre-commit run djlint-reformat-django --all-files
+          uv run pre-commit run djlint-django --all-files
