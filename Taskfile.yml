@@ -117,3 +117,13 @@ tasks:
     desc: Build the Python wheel and source distribution
     cmds:
       - uv build {{.CLI_ARGS}}
+
+  hooks:install:
+    desc: Install the Git pre-commit hook
+    cmds:
+      - uv run --locked pre-commit install
+
+  lint:
+    desc: Run all pinned pre-commit checks
+    cmds:
+      - uv run --locked pre-commit run --all-files {{.CLI_ARGS}}

@@ -1,7 +1,7 @@
 """Optional anywidget wrapper for the existing SampleSift web component."""
 
-from copy import deepcopy
 import json
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote, urlsplit, urlunsplit
@@ -112,7 +112,7 @@ class SampleSift(anywidget.AnyWidget):
             with urlopen(request, timeout=timeout) as response:
                 result = json.load(response)
             if not isinstance(result, dict):
-                raise ValueError("The collection API must return a JSON object.")
+                raise TypeError("The collection API must return a JSON object.")
             items = result.get("items")
             count = result.get("total")
             if (

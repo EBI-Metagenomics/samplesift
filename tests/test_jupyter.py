@@ -10,7 +10,7 @@ import pytest
 
 pytest.importorskip("anywidget")
 
-from samplesift.jupyter import SampleSift  # noqa: E402
+from samplesift.jupyter import SampleSift
 
 
 def test_widget_configuration_is_synced() -> None:
@@ -118,7 +118,7 @@ def test_example_notebook_code(monkeypatch, tmp_path) -> None:
     try:
         for cell in notebook["cells"]:
             if cell["cell_type"] == "code":
-                exec(
+                exec(  # noqa: S102 -- Execute trusted notebook cells from this repository.
                     compile("".join(cell["source"]), "jupyter.ipynb", "exec"), namespace
                 )
         assert isinstance(namespace["widget"], SampleSift)
@@ -165,7 +165,9 @@ def test_notebook_depth_slider_preserves_other_filters(export_widget) -> None:
     }
     before = deepcopy(export_widget.query_state)
     namespace = {"widget": export_widget}
-    exec(compile("".join(cell["source"]), "depth-slider-binding", "exec"), namespace)
+    exec(  # noqa: S102 -- Exercise the trusted notebook binding example.
+        compile("".join(cell["source"]), "depth-slider-binding", "exec"), namespace
+    )
     slider = namespace["depth_slider"]
     try:
         slider.value = 100

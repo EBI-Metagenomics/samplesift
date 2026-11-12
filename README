@@ -175,3 +175,9 @@ Future Python integrations can use additional extras, for example `samplesift[sa
 
 A self-contained Django and PostGIS example with an OBIS fixture is available in
 [examples/obis/README.md](examples/obis/README.md).
+
+## Development checks
+
+Run `task hooks:install` after dependency setup.
+Run `task lint` for all pinned checks.
+See [development checks](docs/development.md) for details.
