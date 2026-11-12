@@ -1,6 +1,6 @@
 {
   "name": "@microbiome-informatics/samplesift",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Framework-agnostic spatial sample explorer built with Lit and MapLibre",
   "type": "module",
   "files": [
