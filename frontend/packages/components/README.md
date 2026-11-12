@@ -14,8 +14,8 @@ that API, and another implementation can follow the same
 
 Python releases also bundle the frontend for Django's `{% samplesift %}` template
 tag, so Django users can use that route without npm. The npm package is for hosts
-that manage their own frontend assets. The two packages have independent versions;
-compatibility follows the collection API contract.
+that manage their own frontend assets. The two packages are released together with matching
+versions; compatibility still follows the collection API contract.
 
 The standalone `<sample-sift-map>` works with points supplied by your application
 and does not need a SampleSift API.
