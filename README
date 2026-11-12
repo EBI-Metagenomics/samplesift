@@ -17,6 +17,8 @@ Install Django support when it is needed:
 pip install "samplesift[django]"
 ```
 
+Django support requires Django 5.0 or later; CI tests Django 5.0, 5.2 and 6.0.
+
 Then add the Django app to `INSTALLED_APPS`:
 
 ```python

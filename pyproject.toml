@@ -12,7 +12,7 @@ jupyter = [
   "traitlets>=5.14,<6",
 ]
 django = [
-  "Django>=6.0,<6.1",
+  "Django>=5.0,<7",
   "django-ninja>=1.5,<2",
   "pygeofilter>=0.3,<0.4",
 ]
@@ -33,7 +33,7 @@ dev = [
   "pytest>=9.0,<10",
   "pytest-django>=4.11,<5",
   "psycopg[binary]>=3.2,<4",
-  "Django>=6.0,<6.1",
+  "Django>=5.0,<7",
   "django-ninja>=1.5,<2",
 ]
 

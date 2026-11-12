@@ -16,12 +16,17 @@ permissions:
 
 jobs:
   django:
-    name: django (Python ${{ matrix.python }})
+    name: django ${{ matrix.django }} (Python ${{ matrix.python }})
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
         python: ["3.12", "3.14"]
+        django: ["5.2", "6.0"]
+        # Lowest supported Django; it predates Python 3.14 support.
+        include:
+          - python: "3.12"
+            django: "5.0"
 
     services:
       postgis:
@@ -58,9 +63,15 @@ jobs:
         with:
           node-version: 24
 
+      # uv.lock pins one Django release; --with overlays the matrix version.
+      - name: Show Django version
+        run: >-
+          uv run --locked --extra django --with "Django==${{ matrix.django }}.*"
+          python -c "import django; print(django.get_version())"
+
       - name: Run Django and PostGIS tests
         run: >-
-          uv run --locked --extra django
+          uv run --locked --extra django --with "Django==${{ matrix.django }}.*"
           pytest --ignore=tests/test_jupyter.py --ignore=tests/test_obis_fixture.py
 
   jupyter:

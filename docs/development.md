@@ -35,7 +35,7 @@ when its paths change:
 
 | Workflow | Runs on changes to | Checks |
 | --- | --- | --- |
-| `test-python.yml` | `src/`, `tests/`, `pyproject.toml`, `uv.lock` | Django/PostGIS suite on Python 3.12 and 3.14, Jupyter wrapper, wheel build and import |
+| `test-python.yml` | `src/`, `tests/`, `pyproject.toml`, `uv.lock` | Django/PostGIS suite on Django 5.2 and 6.0 with Python 3.12 and 3.14, plus Django 5.0 on Python 3.12, Jupyter wrapper, wheel build and import |
 | `test-frontend.yml` | `frontend/` | TypeScript, unit tests, build, package contents, `npm pack --dry-run` |
 | `test-examples.yml` | `examples/` | OBIS fixture contents and provenance |
 
@@ -54,7 +54,9 @@ jobs:
 The Django job uses a `postgis/postgis:16-3.4` service container on port 55432
 with the `samplesift` credentials, matching `docker-compose.yml`. It installs
 GDAL and GEOS on the runner with apt, because GeoDjango loads those libraries
-in the test process. `test_jupyter.py` also reads example data, so a change
+in the test process. `uv.lock` pins a single Django release, so each matrix job
+overlays its Django version with `uv run --with "Django==<version>.*"`.
+`test_jupyter.py` also reads example data, so a change
 under `examples/` alone does not rerun it on pull requests.
 
 CI does not run the Playwright browser tests or start the OBIS example; run
