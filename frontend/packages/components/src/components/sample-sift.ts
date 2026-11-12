@@ -2,6 +2,7 @@ import { LitElement, css, html, nothing } from 'lit';
 import type { PropertyValues } from 'lit';
 import type { Polygon } from 'geojson';
 import type { StyleSpecification } from 'maplibre-gl';
+import type { MapLayerCatalog, MapLayerState } from '../map/layers';
 import { createDemoSamples, createFixtureDataSource, createHttpDataSource } from '../data/index';
 import { EMPTY_FILTERS } from '../types';
 import { validateFilters } from '../data/filters';
@@ -35,6 +36,8 @@ export class SampleSift extends LitElement {
     _filterError: { state: true },
     selection: { attribute: false },
     mapStyle: { attribute: false },
+    mapLayers: { attribute: false },
+    mapLayerState: { attribute: false },
     _result: { state: true },
     _loading: { state: true },
     _error: { state: true },
@@ -62,6 +65,8 @@ export class SampleSift extends LitElement {
   private _filterError = '';
   selection: Polygon | null = null;
   mapStyle: StyleSpecification | string | undefined;
+  mapLayers?: MapLayerCatalog;
+  mapLayerState?: MapLayerState;
   private _result: SearchResult | null = null;
   private _loading = false;
   private _error = '';
@@ -206,6 +211,11 @@ export class SampleSift extends LitElement {
   private onCollectionState(event: CustomEvent) {
     // Keep the same immutable state reference to avoid a second search during event reflection.
     this.collectionState = (event.currentTarget as SampleSiftCollection).state;
+  }
+
+  private onMapLayerChange(event: CustomEvent<{ state: MapLayerState }>) {
+    this.mapLayerState = structuredClone(event.detail.state);
+    // The composed event continues to the host; display choices never become query state.
   }
 
   async refresh(): Promise<void> {
@@ -372,7 +382,8 @@ export class SampleSift extends LitElement {
   render() {
     if (this._collectionConfig) return html`<sample-sift-collection
       .options=${this._collectionConfig} .filterMode=${this.filterMode} .filterDebounceMs=${this.filterDebounceMs} .state=${this.collectionState} .paused=${this.collectionPaused}
-      .mapStyle=${this.mapStyle} .pageSize=${this.pageSize}
+      .mapStyle=${this.mapStyle} .mapLayers=${this.mapLayers} .mapLayerState=${this.mapLayerState} .pageSize=${this.pageSize}
+      @maplayerchange=${this.onMapLayerChange}
       @collectionstatechange=${this.onCollectionState}></sample-sift-collection>`;
     const result = this._result;
     const visibleItems = this._loading || this._error || this._filterError ? [] : result?.items ?? [];
@@ -411,6 +422,9 @@ export class SampleSift extends LitElement {
               .samples=${visibleItems}
               .selection=${this.selection}
               .mapStyle=${this.mapStyle}
+              .mapLayers=${this.mapLayers}
+              .mapLayerState=${this.mapLayerState}
+              @maplayerchange=${this.onMapLayerChange}
               @selectionchange=${this.onSelection}
               @sampleclick=${this.onMapSample}
             ></sample-sift-map>

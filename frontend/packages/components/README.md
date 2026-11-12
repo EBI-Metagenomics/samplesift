@@ -37,6 +37,38 @@ Filters use a searchable **Add filter** picker with compact field cards, inclusi
 
 Use `collectionState`, silent `setCollectionState(state)`, `collectionMetadata`, and `collectionPaused` for host integration. Collection events and pure URL helpers are documented in [COLLECTION_API.md](COLLECTION_API.md). The host owns optional URL synchronization. The direct `<sample-sift-collection>` element exposes the same explorer without the legacy wrapper.
 
+## Map backgrounds and environmental layers
+
+The **Layers** control offers Standard (OpenStreetMap), Satellite (ESA Sentinel-2 RGB, 2021 composite), and Topographic (OpenTopoMap) backgrounds. **WorldCover 2021** is a separate land-cover overlay with opacity and a class legend. Its colors describe the 2021 map, not the environment on a sample's collection date. These are display layers: showing WorldCover does not add a land-cover search predicate.
+
+Switching these layers keeps the same MapLibre instance, camera, sample layers, highlighting, committed region and unfinished drawing. Only active providers load tiles. Provider loading/error feedback is separate from sample-location tile errors, so a background outage does not disable sample interaction. Provider attribution remains on the map. A provider that fails or takes longer than 15 seconds offers its own retry action; the map-only element also exposes `retryMapLayer(id)`. The composed `maplayererror` event reports `{ id, message }`.
+
+The same `mapLayers` and `mapLayerState` JavaScript properties work on `<sample-sift>`, `<sample-sift-collection>` and `<sample-sift-map>`:
+
+```js
+import { defaultMapLayers, normalizeMapLayerState } from '@samplesift/components/data';
+
+const explorer = document.querySelector('sample-sift');
+explorer.mapLayers = defaultMapLayers;
+const display = normalizeMapLayerState(undefined, defaultMapLayers);
+display.basemap = 'satellite';
+display.overlays['worldcover-2021'] = { visible: true, opacity: 0.45 };
+explorer.mapLayerState = display; // Silent host update; no search or URL mutation.
+
+explorer.addEventListener('maplayerchange', event => {
+  // The host may persist event.detail.state in its own application state.
+  console.log(event.detail.state);
+});
+```
+
+The catalog contains `basemaps` and optional `overlays` arrays of `RasterMapLayer`: `id`, `label`, raster `tiles` URL templates, and `attribution` are required. Optional settings include `tileSize`, `minZoom`, `maxZoom`, `description`, `year`, `legend` entries (`label` and six-digit hex `color`), and `resampling` (`linear` or `nearest`). Categorical WorldCover uses nearest-neighbor rendering to avoid blending class colors. Hosts can provide their own XYZ or compatible WMS tile URLs, including their provider's browser API key when needed. The built-in presets do not require accounts or keys. The ESA layers use the public cached MapProxy service used by the WorldCover viewer, with global overviews as well as detailed tiles.
+
+Catalog and state validation helpers are DOM-free. Unknown layer IDs and invalid opacity values are rejected rather than interpreted as search filters. `maplayerchange` bubbles across Shadow DOM once for each user action and supplies `{ state }`; property assignments are silent. Display preferences are excluded from the collection URL/query helpers.
+
+Supplying `mapStyle` without `mapLayers` preserves the existing custom-style behavior and hides the layer control. An explicit catalog opts into managed raster layers above that custom style and below samples and selection. An empty catalog (`{ basemaps: [], overlays: [] }`) disables managed layers and controls. `mapStyle` remains an advanced full-style replacement; use `mapLayerState` for seamless background switching.
+
+Providers retain their own licensing and service policies. See [OpenStreetMap tile policy](https://operations.osmfoundation.org/policies/tiles/), [ESA WorldCover data and attribution](https://esa-worldcover.org/en/data-access), and [OpenTopoMap usage](https://opentopomap.org/about). The package does not proxy, download or host these datasets. Availability and coverage depend on the configured providers.
+
 ## Legacy mode: embed
 
 The following sections describe the original fixed sample contract, used when no collection is configured. Its state, adapters, methods and events remain separate from collection mode.

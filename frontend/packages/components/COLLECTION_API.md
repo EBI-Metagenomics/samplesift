@@ -22,6 +22,8 @@ For object configuration, assign `collectionOptions`; it takes precedence over t
 | `collectionMetadata` | `metadata` |
 | `filterMode` (default `'manual'`) | `filterMode` |
 | `filterDebounceMs` (default `500`) | `filterDebounceMs` |
+| `mapLayers` | `mapLayers` |
+| `mapLayerState` | `mapLayerState` |
 
 Both expose the collection events below. The remaining code examples use the **direct element**. Import the package and assign `options` as a JavaScript property. `baseUrl` is the **API root**, including `/samplesift`; `collection` is an identifier beneath that root.
 
@@ -106,6 +108,12 @@ The separate local backend uses a world-aligned grid for display aggregation: ce
 Clusters render as larger circles with count labels; clicking one zooms toward it without pretending it is an individual record. Clicking a singleton emits `featureclick` directly from its tile properties, even when that record is not on the current table page. The pinned MapLibre version can render the count labels using local `sans-serif` glyphs when the style has no glyphs URL; the default raster/background-only styles need no remote font endpoint.
 
 `items` are validated as records with a nonempty string `source_pk` and a GeoJSON Point or `null` geometry. Columns are derived from the OpenAPI item schema. `total` is optional: when absent, the UI identifies the number of records on the current page rather than inventing a total. There is no collection facet-count endpoint or facet UI in this contract.
+
+## Map display preferences
+
+Backgrounds and environmental overlays are configured with `mapLayers` and `mapLayerState` on either public explorer or the map-only element. Built-in options include Standard, Satellite (2021 composite), Topographic and a WorldCover 2021 overlay. These display choices leave predicates, pagination, geometry and sample tile requests unchanged; switching backgrounds also preserves a polygon in progress. See the [map layer integration guide](README.md#map-backgrounds-and-environmental-layers) for the catalog, defaults and silent host restoration.
+
+The composed `maplayerchange` event carries `{ state }` for user display actions. It is independent of `collectionstatechange`, and the collection URL helpers deliberately do not store it. Any persistence belongs to the host. A WorldCover layer supplies visual land-cover context and does not classify samples or add filtering capabilities to the backend.
 
 ## Metadata readiness and host-owned URLs
 

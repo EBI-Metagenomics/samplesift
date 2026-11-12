@@ -9,3 +9,6 @@ export { EMPTY_FILTERS } from '../types';
 export type * from '../types';
 export type { HttpDataSourceOptions } from './http';
 export * from '../collection/index';
+
+export { defaultMapLayers, validateMapLayerCatalog, normalizeMapLayerState } from '../map/layers';
+export type { RasterMapLayer, MapLayerCatalog, MapLayerState } from '../map/layers';

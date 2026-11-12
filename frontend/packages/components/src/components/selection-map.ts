@@ -23,6 +23,10 @@ import { isValidCoordinate, validatePolygon } from '../data/validation';
 import type { Sample, SampleClickDetail, SelectionChangeDetail } from '../types';
 import { createCollectionTileLoader } from '../collection/tiles';
 import type { CollectionFeatureClickDetail, CollectionTileSource } from '../collection/tiles';
+import { defaultMapLayers, normalizeMapLayerState, validateMapLayerCatalog } from '../map/layers';
+import type { MapLayerCatalog, MapLayerState, RasterMapLayer } from '../map/layers';
+import { MANAGED_SOURCE_PREFIX, ManagedRasterLayers } from '../map/managed-layers';
+import type { ManagedLayerStatus } from '../map/managed-layers';
 
 type SelectionMode = 'rectangle' | 'polygon' | 'select';
 const SAMPLE_SOURCE = 'samplesift-samples';
@@ -50,6 +54,11 @@ export const defaultMapStyle: StyleSpecification = {
   layers: [{ id: 'osm', type: 'raster', source: 'osm', paint: { 'raster-saturation': -0.55 } }],
 };
 
+const managedMapStyle: StyleSpecification = {
+  version: 8, sources: {},
+  layers: [{ id: 'samplesift-background', type: 'background', paint: { 'background-color': '#e8eff0' } }],
+};
+
 const emptyCollection = (): FeatureCollection => ({ type: 'FeatureCollection', features: [] });
 const clonePolygon = (polygon: Polygon): Polygon => ({
   type: 'Polygon',
@@ -64,6 +73,12 @@ export class SampleSiftMap extends LitElement {
     selectionModes: { attribute: false },
     selection: { attribute: false },
     mapStyle: { attribute: false },
+    mapLayers: { attribute: false },
+    mapLayerState: { attribute: false },
+    _layersOpen: { state: true },
+    _layerState: { state: true },
+    _layerStatuses: { state: true },
+    _layerConfigError: { state: true },
     _mode: { state: true },
     _ready: { state: true },
     _error: { state: true },
@@ -76,7 +91,7 @@ export class SampleSiftMap extends LitElement {
   static styles = [unsafeCSS(mapLibreStyles), css`
     :host { display: block; position: relative; min-height: 360px; height: 100%; color: #173c3b; }
     * { box-sizing: border-box; }
-    .surface { position: relative; height: 100%; min-height: inherit; overflow: hidden; background: #e8eff0; }
+    .surface { position: relative; container-type: inline-size; height: 100%; min-height: inherit; overflow: hidden; background: #e8eff0; }
     .map { position: absolute; inset: 0; }
     .toolbar { position: absolute; z-index: 3; top: 16px; left: 16px; display: flex; gap: 4px; flex-wrap: wrap;
       max-width: calc(100% - 76px); padding: 5px; border: 1px solid #d4dedc; border-radius: 10px;
@@ -104,6 +119,27 @@ export class SampleSiftMap extends LitElement {
       border-top-color: #176d5c; border-radius: 50%; animation: spin .8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
     @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+    .layer-controls { position: absolute; z-index: 4; right: 60px; top: 16px; display: flex; flex-direction: column; align-items: flex-end; max-width: calc(100% - 32px); max-height: calc(100% - 51px); }
+    .layers-toggle { flex: 0 0 auto; background: #fff; border: 1px solid #cbdad3; box-shadow: 0 2px 10px #102b2918; }
+    .layers-toggle .layer-warning { color: #953d2a; }
+    .layers-panel { min-height: 0; flex: 1 1 auto; width: 292px; max-width: 100%; max-height: min(380px, calc(100vh - 220px)); overflow-y: auto; margin-top: 14px; padding: 14px; border: 1px solid #cbdad3; border-radius: 9px; background: rgba(255,255,255,.98); box-shadow: 0 3px 16px #102b2925; font: 12px/1.45 var(--samplesift-font, system-ui, sans-serif); }
+    .layers-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; } .layers-heading h3 { font: 650 13px/1.3 var(--samplesift-font, system-ui, sans-serif); margin: 0; }
+    .layers-close { padding: 2px 6px; min-height: 26px; font-size: 18px; }
+    .layers-panel fieldset { margin: 0; padding: 0; border: 0; min-width: 0; } .layers-panel legend { font-weight: 650; margin-bottom: 6px; padding: 0; }
+    .layer-choice { display: flex; align-items: flex-start; gap: 7px; padding: 5px 0; cursor: pointer; }
+    .layer-choice input { margin: 2px 0 0; accent-color: #176d5c; flex: 0 0 auto; } .layer-choice small { display: block; margin-top: 2px; color: #687d72; font-size: 10px; line-height: 1.4; }
+    .layer-choice strong { font-weight: 550; } .layer-choice input:focus-visible, .layer-opacity input:focus-visible { outline: 2px solid #176d5c; outline-offset: 2px; }
+    .layer-overlays { margin-top: 10px; padding-top: 10px; border-top: 1px solid #dce5df; } .layer-opacity { display: block; padding: 4px 0 4px 20px; } .layer-opacity span { display: flex; align-items: center; justify-content: space-between; } .layer-opacity input { display: block; width: 100%; margin: 5px 0; accent-color: #176d5c; }
+    .layer-legend { margin: 5px 0 8px 20px; } .layer-legend summary { cursor: pointer; font-size: 11px; color: #3c6251; } .layer-legend ul { list-style: none; padding: 4px 0 0; margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; } .layer-legend li { display: flex; align-items: center; gap: 5px; font-size: 10px; } .layer-swatch { width: 10px; height: 10px; border: 1px solid #70807850; flex: 0 0 auto; }
+    .provider-status { margin: 4px 0 6px 20px; color: #667d70; font-size: 11px; } .provider-status.error { color: #953d2a; } .provider-status button { min-height: 26px; padding: 3px 6px; margin-top: 4px; color: inherit; border: 1px solid #d3b5a8; font-size: 11px; } .provider-status p { margin: 0; }
+    .layers-notice { max-width: 235px; margin-top: 6px; background: #fff; border: 1px solid #dec7b7; border-radius: 6px; padding: 6px 9px; font-size: 11px; line-height: 1.4; color: #953d2a; }
+    @container (max-width: 519px) {
+      .layer-controls { right: 10px; top: 92px; max-width: calc(100% - 20px); max-height: calc(100% - 127px); }
+      .layers-panel { width: 262px; max-height: 205px; padding: 11px; }
+    }
+    @container (max-width: 360px) {
+      .layer-controls { top: 106px; max-height: calc(100% - 141px); }
+    }
     .maplibregl-ctrl-top-right { top: 6px; right: 6px; }
     .maplibregl-ctrl-attrib { font-size: 10px; }
     @media (max-width: 520px) {
@@ -119,6 +155,15 @@ export class SampleSiftMap extends LitElement {
   selectionModes: readonly ('rectangle' | 'polygon')[] = ['rectangle', 'polygon'];
   selection: Polygon | null = null;
   mapStyle?: StyleSpecification | string;
+  mapLayers?: MapLayerCatalog;
+  mapLayerState?: MapLayerState;
+
+  private _layersOpen = false;
+  private _layerCatalog?: MapLayerCatalog;
+  private _layerState?: MapLayerState;
+  private _layerStatuses: ManagedLayerStatus[] = [];
+  private _layerConfigError = '';
+  private _managedLayers?: ManagedRasterLayers;
 
   private _mode: SelectionMode = 'select';
   private _tileProtocol = `samplesift-${Date.now().toString(36)}-${++tileProtocolSequence}-${Math.random().toString(36).slice(2)}`;
@@ -161,6 +206,7 @@ export class SampleSiftMap extends LitElement {
   }
 
   protected updated(changed: PropertyValues<this>): void {
+    if (changed.has('mapLayers') || changed.has('mapLayerState') || changed.has('mapStyle')) this._resolveMapLayers();
     if (changed.has('selectionModes') && this._mode !== 'select' && !this.selectionModes.includes(this._mode)) this.setMode('select');
     if (changed.has('mapStyle') && this._map) {
       this._unmountMap();
@@ -225,13 +271,14 @@ export class SampleSiftMap extends LitElement {
     const container = this.renderRoot.querySelector<HTMLElement>('.map');
     if (!container) return;
     container.replaceChildren();
+    this._resolveMapLayers();
     const generation = ++this._generation;
     this._ready = false;
     this._error = '';
     try {
       const map = new MapLibreMap({
         container,
-        style: this.mapStyle ?? defaultMapStyle,
+        style: this.mapStyle ?? managedMapStyle,
         center: this._view?.center ?? [12, 25],
         zoom: this._view?.zoom ?? 1.35,
         minZoom: 0.7,
@@ -254,6 +301,8 @@ export class SampleSiftMap extends LitElement {
       map.on('error', (event) => {
         if (this._map !== map || (event.error as { name?: string } | undefined)?.name === 'AbortError') return;
         const sourceId = (event as unknown as { sourceId?: string }).sourceId;
+        // Contextual providers have their own loading, error and retry UI.
+        if (sourceId?.startsWith(MANAGED_SOURCE_PREFIX)) return;
         if (sourceId === this._collectionSourceId && this._collectionSourceId) {
           // Transport failures already carry a useful message. Decode/render failures
           // also need the same retry path, without being confused with basemap errors.
@@ -280,6 +329,13 @@ export class SampleSiftMap extends LitElement {
         try {
           map.setProjection({ type: 'mercator' });
           this._initialiseLayers(map);
+          this._managedLayers = new ManagedRasterLayers(map,
+            statuses => { if (this._map === map) this._layerStatuses = statuses; },
+            (id, message) => { if (this._map === map) this.dispatchEvent(new CustomEvent('maplayererror', {
+              detail: { id, message }, bubbles: true, composed: true,
+            })); },
+          );
+          this._managedLayers.update(this._layerCatalog, this._layerState);
           const draw = new TerraDraw({
             adapter: new TerraDrawMapLibreGLAdapter({ map }),
             modes: [new TerraDrawRectangleMode(), new TerraDrawPolygonMode(), new TerraDrawSelectMode()],
@@ -525,6 +581,9 @@ export class SampleSiftMap extends LitElement {
 
   private _unmountMap(): void {
     ++this._generation;
+    this._managedLayers?.destroy();
+    this._managedLayers = undefined;
+    this._layerStatuses = [];
     this._resizeObserver?.disconnect();
     this._resizeObserver = undefined;
     const map = this._map;
@@ -551,6 +610,100 @@ export class SampleSiftMap extends LitElement {
         this._ready = false;
       }
     }
+  }
+
+  /** Restore presentation preferences silently; they never enter the collection query. */
+  private _resolveMapLayers(): void {
+    try {
+      const catalog = this.mapLayers ?? (this.mapStyle === undefined ? defaultMapLayers : undefined);
+      if (catalog) validateMapLayerCatalog(catalog);
+      this._layerCatalog = catalog;
+      this._layerState = catalog ? normalizeMapLayerState(this.mapLayerState, catalog) : undefined;
+      this._layerConfigError = '';
+      if (!catalog?.basemaps.length && !catalog?.overlays?.length) this._layersOpen = false;
+      this._managedLayers?.update(catalog, this._layerState);
+    } catch (error) {
+      this._layerCatalog = undefined;
+      this._layerState = undefined;
+      this._layerConfigError = error instanceof Error ? error.message : 'Map layer options are invalid.';
+      this._managedLayers?.update(undefined, undefined);
+    }
+  }
+
+  private _changeMapLayers(state: MapLayerState): void {
+    if (!this._layerCatalog) return;
+    const next = normalizeMapLayerState(state, this._layerCatalog);
+    if (JSON.stringify(next) === JSON.stringify(this._layerState)) return;
+    this.mapLayerState = structuredClone(next);
+    this._layerState = next;
+    this._managedLayers?.update(this._layerCatalog, next);
+    this.dispatchEvent(new CustomEvent('maplayerchange', {
+      detail: { state: structuredClone(next) }, bubbles: true, composed: true,
+    }));
+  }
+
+  /** Retry a contextual provider without recreating the map or the collection source. */
+  retryMapLayer(id: string): void {
+    this._managedLayers?.retry(id);
+    this._managedLayers?.update(this._layerCatalog, this._layerState);
+  }
+
+  private _closeLayers(): void {
+    this._layersOpen = false;
+    void this.updateComplete.then(() => this.renderRoot.querySelector<HTMLButtonElement>('.layers-toggle')?.focus());
+  }
+
+  private _renderProviderStatus(layer: RasterMapLayer) {
+    const status = this._layerStatuses.find(item => item.id === layer.id);
+    if (status?.error) return html`<div class="provider-status error" role="status" data-testid=${`map-layer-error-${layer.id}`}>
+      <p>${status.error}</p><button type="button" @click=${() => this.retryMapLayer(layer.id)}>Retry ${layer.label}</button>
+    </div>`;
+    return status?.loading ? html`<p class="provider-status" role="status" data-testid=${`map-layer-loading-${layer.id}`}>Loading ${layer.label}…</p>` : nothing;
+  }
+
+  private _renderLayers() {
+    const catalog = this._layerCatalog;
+    const state = this._layerState;
+    const hasLayers = Boolean(catalog && (catalog.basemaps.length || catalog.overlays?.length));
+    if (!hasLayers && !this._layerConfigError) return nothing;
+    const errors = this._layerStatuses.filter(status => status.error);
+    return html`<div class="layer-controls" @pointerdown=${(event: Event) => event.stopPropagation()}
+      @click=${(event: Event) => event.stopPropagation()} @dblclick=${(event: Event) => event.stopPropagation()}
+      @wheel=${(event: Event) => event.stopPropagation()}
+      @keydown=${(event: KeyboardEvent) => { event.stopPropagation(); if (event.key === 'Escape') { event.preventDefault(); this._closeLayers(); } }}>
+      ${hasLayers ? html`<button type="button" class="layers-toggle" aria-label="Layers" aria-expanded=${this._layersOpen}
+        @click=${() => { this._layersOpen = !this._layersOpen; }}>
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m2 6 8-4 8 4-8 4-8-4Zm0 4 8 4 8-4M2 14l8 4 8-4"/></svg>
+        Layers${errors.length ? html`<span class="layer-warning" aria-label="Some map layers failed">!</span>` : nothing}
+      </button>` : nothing}
+      ${this._layerConfigError ? html`<p class="layers-notice" role="alert">${this._layerConfigError}</p>` : nothing}
+      ${!this._layersOpen && errors.length ? html`<p class="layers-notice" role="status">${errors.map(status => status.label).join(', ')} could not load. Open Layers to retry.</p>` : nothing}
+      ${this._layersOpen && catalog && state ? html`<section class="layers-panel" aria-label="Map layers">
+        <div class="layers-heading"><h3>Map layers</h3><button type="button" class="layers-close" aria-label="Close map layers" @click=${this._closeLayers}>×</button></div>
+        ${catalog.basemaps.length ? html`<fieldset><legend>Basemap</legend>
+          ${catalog.basemaps.map(layer => html`<label class="layer-choice"><input type="radio" name="samplesift-basemap" .value=${layer.id}
+            aria-label=${layer.label} .checked=${state.basemap === layer.id}
+            @change=${() => this._changeMapLayers({ ...state, basemap: layer.id })}>
+            <span><strong>${layer.label}</strong>${layer.description ? html`<small>${layer.description}</small>` : layer.year ? html`<small>${layer.year}</small>` : nothing}</span>
+          </label>${state.basemap === layer.id ? this._renderProviderStatus(layer) : nothing}`)}
+        </fieldset>` : nothing}
+        ${(catalog.overlays ?? []).map(layer => {
+          const preference = state.overlays[layer.id];
+          return html`<div class="layer-overlays"><label class="layer-choice"><input type="checkbox" aria-label=${layer.label}
+            .checked=${preference.visible} @change=${(event: Event) => this._changeMapLayers({ ...state, overlays: { ...state.overlays, [layer.id]: { ...preference, visible: (event.target as HTMLInputElement).checked } } })}>
+            <span><strong>${layer.label}${layer.year ? html` · ${layer.year}` : nothing}</strong>${layer.description ? html`<small>${layer.description}</small>` : nothing}</span>
+          </label>
+          ${preference.visible ? html`<label class="layer-opacity"><span>${layer.label} opacity <output>${Math.round(preference.opacity * 100)}%</output></span>
+            <input type="range" min="0" max="100" step="5" aria-label=${`${layer.label} opacity`} .value=${String(Math.round(preference.opacity * 100))}
+              @input=${(event: Event) => this._changeMapLayers({ ...state, overlays: { ...state.overlays, [layer.id]: { ...preference, opacity: Number((event.target as HTMLInputElement).value) / 100 } } })}>
+          </label>${this._renderProviderStatus(layer)}` : nothing}
+          ${layer.legend?.length ? html`<details class="layer-legend"><summary>${layer.label} legend${layer.year ? ` · ${layer.year}` : ''}</summary><ul>
+            ${layer.legend.map(item => html`<li><span class="layer-swatch" style=${`background-color: ${item.color}`} aria-hidden="true"></span>${item.label}</li>`)}
+          </ul></details>` : nothing}
+          </div>`;
+        })}
+      </section>` : nothing}
+    </div>`;
   }
 
   protected render() {
@@ -584,6 +737,7 @@ export class SampleSiftMap extends LitElement {
           <button type="button" class="clear" ?disabled=${!this._ready || (!this.selection && this._mode === 'select')}
             @click=${() => this.clearSelection()}>Clear</button>
         </div>
+        ${this._renderLayers()}
         ${tileError ? html`<div class="hint tile-status error" role="alert" data-testid="tile-error">
           <div><strong>Map locations could not load.</strong><p>${tileError} Some locations may be missing.</p>
             <button type="button" class="retry" @click=${this.retryTiles}>Retry map tiles</button></div>

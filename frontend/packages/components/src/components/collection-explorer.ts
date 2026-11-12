@@ -1,5 +1,6 @@
 import { LitElement, css, html, nothing, type PropertyValues } from 'lit';
 import type { StyleSpecification } from 'maplibre-gl';
+import type { MapLayerCatalog, MapLayerState } from '../map/layers';
 import {
   buildCollectionQuery, createCollectionDataSource, createEmptyCollectionState, validateCollectionState,
 } from '../collection/index';
@@ -19,6 +20,7 @@ import './collection-filter-form';
 export class SampleSiftCollection extends LitElement {
   static properties = {
     options: { attribute: false }, state: { attribute: false }, mapStyle: { attribute: false },
+    mapLayers: { attribute: false }, mapLayerState: { attribute: false },
     pageSize: { type: Number }, paused: { type: Boolean },
     filterMode: { type: String, attribute: 'filter-mode' }, filterDebounceMs: { type: Number, attribute: 'filter-debounce-ms' },
     _restoreRevision: { state: true },
@@ -29,6 +31,8 @@ export class SampleSiftCollection extends LitElement {
   options?: CollectionOptions;
   state: CollectionSearchState = createEmptyCollectionState();
   mapStyle?: StyleSpecification | string;
+  mapLayers?: MapLayerCatalog;
+  mapLayerState?: MapLayerState;
   pageSize = 25;
   paused = false;
   filterMode: 'auto' | 'manual' = 'manual';
@@ -189,6 +193,9 @@ export class SampleSiftCollection extends LitElement {
     this._activeFeature = structuredClone(event.detail.properties);
     // Already a public, composed event; allow it through without emitting a duplicate.
   }
+  private onMapLayerChange(event: CustomEvent<{ state: MapLayerState }>) {
+    this.mapLayerState = structuredClone(event.detail.state);
+  }
   private get filterForm() {
     return this.renderRoot.querySelector<SampleSiftCollectionFilterForm>('sample-sift-collection-filter-form');
   }
@@ -235,7 +242,8 @@ export class SampleSiftCollection extends LitElement {
       </aside>
       <main>
         <sample-sift-map .tileSource=${this._tileSource} .selection=${this.state.selection} .selectionModes=${modes}
-          .mapStyle=${this.mapStyle} @selectionchange=${this.onSelection} @featureclick=${this.onFeature}></sample-sift-map>
+          .mapStyle=${this.mapStyle} .mapLayers=${this.mapLayers} .mapLayerState=${this.mapLayerState}
+          @maplayerchange=${this.onMapLayerChange} @selectionchange=${this.onSelection} @featureclick=${this.onFeature}></sample-sift-map>
         <div class="caption">${this.options?.tiles ? 'The map shows all matching locations. Cluster labels count records; zoom in to explore.' : 'No vector-tile layer configured. Records are available in the table.'}</div>
         ${this._activeFeature ? html`<details class="feature" open><summary>Selected record</summary><dl>${Object.entries(this._activeFeature).filter(([key]) => !['geometry', 'cluster', 'cluster_id', 'point_count'].includes(key)).map(([key, value]) => html`<dt>${key}</dt><dd>${this.format(value)}</dd>`)}</dl></details>` : nothing}
         <section class="results" aria-busy=${this._loading}>
