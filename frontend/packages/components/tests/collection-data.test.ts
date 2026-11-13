@@ -71,14 +71,33 @@ describe('collection metadata', () => {
     const model = metadata(true, {
       name: field('string', ['=', 'like']),
       complex: { anyOf: [{ type: 'string' }, { type: 'number' }], 'x-samplesift': { operators: ['='] } },
-      timestamp: field('string', ['='], { format: 'date-time' }),
+      timestamp: field('string', ['='], { format: 'time' }),
     });
     expect(model.fields.find(item => item.name === 'name')?.operators).toEqual(['=']);
     expect(model.fields.some(item => item.name === 'complex' || item.name === 'timestamp')).toBe(false);
     expect(model.diagnostics.join(' ')).toContain('unsupported operator like');
     expect(model.diagnostics.join(' ')).toContain('anyOf');
-    expect(model.diagnostics.join(' ')).toContain('date-time');
+    expect(model.diagnostics.join(' ')).toContain('unsupported format time');
     expect(() => validateCollectionState(state([{ field: 'complex', operator: '=', value: 'x' }]), model)).toThrow('unsupported');
+  });
+
+  it('supports timezone-aware timestamps and typed CQL2 literals', () => {
+    const model = metadata(true, { updated_at: field('string', allOps, { format: 'date-time' }) });
+    expect(model.fields.find(item => item.name === 'updated_at')?.kind).toBe('date-time');
+    expect(model.diagnostics).toEqual([]);
+    for (const operator of ['=', '>=', 'in', 'isNull'] as const) {
+      const timestamp = '2026-11-12T16:57:04.252388+00:00';
+      const predicate: Predicate = operator === 'isNull' ? { field: 'updated_at', operator }
+        : { field: 'updated_at', operator, value: operator === 'in' ? [timestamp] : timestamp };
+      const filter = compileCollectionFilter(state([predicate]), model);
+      expect(filter).toEqual({ op: operator, args: [{ property: 'updated_at' },
+        ...(operator === 'isNull' ? [] : [operator === 'in' ? [{ timestamp }] : { timestamp }])] });
+      expect(() => validateCollectionQuery({ filter }, model)).not.toThrow();
+    }
+    for (const value of ['2026-11-12', '2026-11-12T12:00:00', '2025-02-29T12:00:00Z', '2026-11-12T24:00:00Z']) {
+      expect(() => validateCollectionState(state([{ field: 'updated_at', operator: '=', value }]), model)).toThrow();
+    }
+    expect(() => validateCollectionQuery({ filter: { op: '=', args: [{ property: 'updated_at' }, '2026-11-12T12:00:00Z'] } }, model)).toThrow('timestamp literal');
   });
 
   it('rejects ambiguous geometry properties and ambiguous results operations', () => {

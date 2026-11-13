@@ -79,9 +79,9 @@ Use the supported CQL2 subset below when implementing another provider. A generi
 
 ## Queryables, Golem, and CQL2
 
-The metadata parser reads primitive number, integer, string, date, and boolean fields. Operators come from each field's `x-samplesift.operators` capability list. The supported scalar subset is `=`, `<>`, `in`, `isNull`, `>`, `>=`, `<`, and `<=`. Unknown operators or unsupported schema constraints produce diagnostics and unavailable controls; they are not silently converted into weaker filters.
+The metadata parser reads primitive number, integer, string, date, date-time, and boolean fields. Operators come from each field's `x-samplesift.operators` capability list. The supported scalar subset is `=`, `<>`, `in`, `isNull`, `>`, `>=`, `<`, and `<=`. Unknown operators or unsupported schema constraints produce diagnostics and unavailable controls; they are not silently converted into weaker filters.
 
-The **Add filter** picker searches available fields. Each selected field has a compact Golem-generated card: numbers and dates start with inclusive ranges when supported, text starts with equality, and **Condition** exposes the other advertised operators. Field titles, descriptions, enums and constraints come from metadata. Backend-supplied UI expressions or widget definitions are not executed, and no value suggestions or facet counts are inferred from a result page.
+The **Add filter** picker searches available fields. Each selected field has a compact Golem-generated card: numbers, dates, and date-times start with inclusive ranges when supported, text starts with equality, and **Condition** exposes the other advertised operators. Field titles, descriptions, enums and constraints come from metadata. Backend-supplied UI expressions or widget definitions are not executed, and no value suggestions or facet counts are inferred from a result page.
 
 By default, filters remain drafts until **Apply filters** validates and commits them. **Discard changes** restores the applied filters; **Clear filters** explicitly commits an empty predicate list while retaining the selected region. Invalid or incomplete drafts never issue a broader search. Applied filter chips summarize the current query and let users edit or remove a field. Map selection, sorting and pagination continue to operate on the applied predicates without erasing a draft.
 
@@ -108,6 +108,14 @@ explorer.setState(state); // Silent, complete state replacement; resets table pa
 ```
 
 All names, values, and sort entries must satisfy current metadata. Supported declared value constraints include enums/constants, numeric bounds and `multipleOf`, string length/pattern, and valid calendar dates. The compiler combines predicates with CQL2 `and`; date comparisons use canonical `{ "date": "YYYY-MM-DD" }` literals. `in` uses `[propertyReference, valueArray]`, and `isNull` has one property argument with no value. Inclusive form ranges compile to `>=` and/or `<=`. This is a bounded CQL2 subset, not an arbitrary expression editor.
+
+Date-time fields use the existing Golem calendar and time picker. No additional dependency is required.
+The picker displays and edits UTC, as its hint states. Calendar edits have minute precision.
+Saved timestamps retain seconds and fractional seconds until edited in the picker.
+Membership lists accept ISO timestamps with seconds and an explicit `Z` or UTC offset.
+State predicates also require an explicit timezone, for example `2026-11-12T16:57:04.252388+00:00`.
+The compiler emits CQL2 `{ "timestamp": "..." }` literals for comparisons and membership lists.
+Date-time ranges compare instants across UTC offsets.
 
 The compact form edits one condition or one inclusive range per field. Valid saved combinations outside that editor remain visible as read-only cards and continue to filter the query; removing one stages its removal without discarding other fields. Low-level `compileCollectionFilter`, `buildCollectionQuery`, `validateCollectionState`, and `createCollectionDataSource` are available from `@microbiome-informatics/samplesift/data`.
 
