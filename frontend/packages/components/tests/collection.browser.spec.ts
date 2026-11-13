@@ -8,7 +8,7 @@ import { booleanPointInPolygon } from '@turf/boolean-point-in-polygon';
 const ops = ['=', '<>', 'in', 'isNull', '>', '>=', '<', '<='];
 const field = (type: string, extra = {}) => ({ type, 'x-samplesift': { operators: ops }, ...extra });
 const queryables = { type: 'object', additionalProperties: false, properties: {
-  depth: field('number'), date: field('string', { format: 'date' }),
+  depth: field('number'), date: field('string', { format: 'date' }), updated_at: field('string', { format: 'date-time' }),
   name: field('string', { 'x-samplesift': { operators: ['=', '<>', 'in', 'isNull'] } }),
   temperature: field('number'), geometry: field('object', { 'x-samplesift': { operators: ['s_intersects'] } }),
 } };
@@ -22,7 +22,7 @@ const openapi = { openapi: '3.2.1', paths: { '/samplesift/collections/occurrence
   } } } } } } } },
 } } } };
 const rows = [10, 50, 100, 150, 200, 250].map((depth, i) => ({
-  source_pk: String.fromCharCode(65 + i), depth, name: `Record ${i}`, date: `202${i}-01-01`, temperature: i * 10,
+  source_pk: String.fromCharCode(65 + i), updated_at: `202${i}-01-01T12:00:00Z`, depth, name: `Record ${i}`, date: `202${i}-01-01`, temperature: i * 10,
   geometry: { type: 'Point' as const, coordinates: [i, i] },
 }));
 const tile = readFileSync(new URL('./fixtures/collection.mvt', import.meta.url));
@@ -33,7 +33,7 @@ function matches(item: (typeof rows)[number], expression?: CqlExpression): boole
   if (op === 's_intersects') return booleanPointInPolygon(item.geometry, args[1] as Polygon);
   const actual = item[(args[0] as { property: keyof typeof item }).property] as string | number;
   const raw = args[1];
-  const value = (raw && typeof raw === 'object' && 'date' in raw ? raw.date : raw) as string | number;
+  const value = (raw && typeof raw === 'object' && 'date' in raw ? raw.date : raw && typeof raw === 'object' && 'timestamp' in raw ? raw.timestamp : raw) as string | number;
   switch (op) {
     case '=': return actual === value;
     case '<>': return actual !== value;
@@ -662,4 +662,26 @@ test('saved conditions outside the simple editor stay applied until their card i
   expect(queries).toHaveLength(before + 1);
   expect(queries.at(-1)?.filter).toEqual({ op: '<>', args: [{ property: 'name' }, 'Record 0'] });
   expect(await page.evaluate(() => (window as unknown as { collectionEvents: unknown[] }).collectionEvents.length)).toBe(1);
+});
+
+
+test('date-time calendar applies UTC timestamp filters to results and tiles', async ({ page }) => {
+  const { first, queries, tiles } = await open(page);
+  const card = await condition(first, 'Updated at', '>=');
+  const picker = card.locator('gui-date-time-picker:visible');
+  await expect(picker).toContainText('UTC');
+  await picker.getByRole('button').click();
+  await expect(picker.getByRole('dialog')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await picker.getByRole('spinbutton', { name: 'Month', exact: true }).fill('1');
+  await picker.getByRole('spinbutton', { name: 'Day', exact: true }).fill('1');
+  await picker.getByRole('spinbutton', { name: 'Year', exact: true }).fill('2023');
+  await picker.getByRole('spinbutton', { name: 'Hour', exact: true }).fill('12');
+  await picker.getByRole('spinbutton', { name: 'Minute', exact: true }).fill('0');
+  await picker.getByRole('spinbutton', { name: 'Minute', exact: true }).press('Tab');
+  await first.getByRole('button', { name: 'Apply filters', exact: true }).click();
+  const filter = { op: '>=', args: [{ property: 'updated_at' }, { timestamp: '2023-01-01T12:00:00Z' }] };
+  await expect.poll(() => queries.at(-1)?.filter).toEqual(filter);
+  await expect(first.getByTestId('collection-count')).toHaveText('3 records');
+  await expect.poll(() => tiles.some(query => JSON.stringify(query.filter) === JSON.stringify(filter))).toBe(true);
 });

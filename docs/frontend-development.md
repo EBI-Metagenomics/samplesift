@@ -88,3 +88,14 @@ expected. A 502 response can mean the API is unavailable or the proxy target is
 wrong. Restart Vite after changing the target. Production hosts need their own
 API proxy or suitable CORS configuration; this development proxy is not shipped
 as an API server in the npm package.
+
+## Date-time collection filters
+
+The collection component supports JSON Schema `format: "date-time"` fields.
+It reuses the existing Golem calendar and time picker without another dependency.
+The picker uses UTC and edits dates, hours, and minutes.
+Saved predicates retain seconds and fractional seconds until a picker edit.
+Timestamp lists and host-supplied state require ISO timestamps with seconds and an explicit timezone.
+For example, use `2026-11-12T16:57:04.252388+00:00`.
+Queries use CQL2 `timestamp` literals for both results and tiles.
+See the [component API](../frontend/packages/components/COLLECTION_API.md) for the complete filter contract.

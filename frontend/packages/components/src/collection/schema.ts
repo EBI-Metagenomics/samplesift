@@ -17,7 +17,16 @@ export function isCalendarDate(value: unknown): value is string {
 function validScalarType(value: unknown, kind: FieldKind): value is Scalar {
   if (kind === 'number' || kind === 'integer') return typeof value === 'number' && Number.isFinite(value) && (kind !== 'integer' || Number.isSafeInteger(value));
   if (kind === 'boolean') return typeof value === 'boolean';
-  return typeof value === 'string' && (kind !== 'date' || isCalendarDate(value));
+  return typeof value === 'string' && (kind !== 'date' || isCalendarDate(value))
+    && (kind !== 'date-time' || isDateTime(value));
+}
+
+/** Require a calendar date, time and explicit UTC offset for API timestamps. */
+export function isDateTime(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/i.test(value)
+    && isCalendarDate(value.slice(0, 10)) && Number(value.slice(11, 13)) < 24
+    && Number(value.slice(14, 16)) < 60 && Number(value.slice(17, 19)) < 60
+    && Number.isFinite(Date.parse(value));
 }
 
 /** Enforce every supported declared constraint; unknown constraints make the field unavailable. */
@@ -56,7 +65,7 @@ function fieldKind(schema: Record<string, unknown>): { kind: FieldKind; nullable
   if (schema.nullable !== undefined && typeof schema.nullable !== 'boolean') throw new Error('nullable must be boolean');
   let kind = nonNull[0] as FieldKind;
   if (schema.format !== undefined) {
-    if (schema.format === 'date' && kind === 'string') kind = 'date';
+    if ((schema.format === 'date' || schema.format === 'date-time') && kind === 'string') kind = schema.format;
     else throw new Error(`unsupported format ${String(schema.format)}`);
   }
   return { kind, nullable };
@@ -76,7 +85,7 @@ function parseField(name: string, input: unknown, diagnostics: string[]): Querya
   }
   for (const key of STRING_KEYS) {
     if (schema[key] === undefined) continue;
-    if (kind !== 'string' && kind !== 'date') throw new Error(`${key} requires a string field`);
+    if (kind !== 'string' && kind !== 'date' && kind !== 'date-time') throw new Error(`${key} requires a string field`);
     if (key === 'pattern') {
       if (typeof schema[key] !== 'string') throw new Error('pattern must be a string');
       try { new RegExp(schema[key], 'u'); } catch { throw new Error('pattern is not supported by this client'); }
