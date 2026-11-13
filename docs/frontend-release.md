@@ -1,7 +1,8 @@
 # Publishing the SampleSift component package
 
 The npm package lives in `frontend/packages/components`, not the repository root.
-Its proposed first release is `@samplesift/components@0.1.0`, under Apache-2.0.
+The selected package is `@microbiome-informatics/samplesift`; its first release,
+`0.1.0`, is pending. The frontend package uses Apache-2.0.
 The package license applies to the frontend component package; this does not
 assign a license to the rest of the repository.
 
@@ -10,31 +11,35 @@ examples and supporting assets. Consumers install it with npm and connect it to
 an existing collection API; they do not need a checkout of this repository. The
 Python API is a separate installation and deployment.
 
-Nothing in the preparation commands below uploads a release. A registry lookup
-on 12 November 2026 returned 404 for this package. That means it was not publicly
-listed then; it does **not** establish ownership of the `@samplesift` scope.
-Before publishing, confirm that the publishing account can publish under that
-scope, or agree on another name and update the package, lockfile and examples.
+Nothing in the preparation commands below uploads a release. On 12 November
+2026, the maintainer account's admin access to the `microbiome-informatics` npm
+organization was verified, and the package was not yet listed in the registry.
+The first publication is still pending; use a locally packed archive for consumer
+checks until it is published.
+
+The npm organization is `microbiome-informatics`. The GitHub repository remains
+`EBI-Metagenomics/samplesift`, so trusted publisher settings must use
+`EBI-Metagenomics` as the GitHub owner.
 
 ## Shared versions and release tag
 
 | Distribution | Version source | GitHub release tag | Publisher |
 | --- | --- | --- | --- |
-| PyPI `samplesift` | Root `pyproject.toml` | `v<version>` | `publish-python.yml` |
-| npm `@samplesift/components` | Component `package.json` and frontend lockfile | `v<version>` | `publish-npm.yml` |
+| PyPI `samplesift` | Root `pyproject.toml` | `v<python-version>` | `publish-python.yml` |
+| npm `@microbiome-informatics/samplesift` | Component `package.json` and frontend lockfile | `npm-v<frontend-version>` | `publish-npm.yml` |
 
-Both workflows listen for a **published GitHub release** whose tag starts with
-`v`, so one release publishes both packages. Pushing a tag or saving a draft
-release does not publish a package. Releases with other tags are skipped.
-The versions move in lockstep: the tag must equal `v` followed by the
-`pyproject.toml` version, and the component `package.json` and its lockfile entry
-must have that same version. Each workflow checks both versions before running its
-release checks, so a mismatch fails both publishers rather than shipping one package.
+Both workflows listen for a **published GitHub release**, then accept only their
+own tag prefix. Pushing a tag or saving a draft release does not publish a package.
+The selected workflow rejects a tag that does not exactly match its package
+version before running the release checks. Unrelated releases are skipped.
+Both packages currently say `0.1.0`; future versions do not need to match or be
+bumped together. For example, an npm `0.2.0` release need not change Python `0.1.0`.
 
-Only stable `X.Y.Z` versions are supported, which are valid both as SemVer and
-PEP 440. The npm check rejects GitHub prereleases, prerelease suffixes, leading
-zeroes and build metadata (`+...`). Every npm publication updates npm's `latest`
-dist-tag, independently of GitHub's latest-release flag.
+For npm, a stable version such as `0.1.0` publishes to `latest`. A SemVer prerelease
+such as `0.2.0-beta.1` must be marked as a GitHub prerelease and publishes to `next`.
+The workflow rejects disagreements between that flag and the version, leading
+zeroes and build metadata (`+...`). Every stable npm publication updates npm's
+`latest` dist-tag, independently of GitHub's latest-release flag.
 
 The Python distribution bundles the frontend built from its own release commit;
 it does not download the npm package. Existing Python wheels are not updated;
@@ -83,8 +88,8 @@ wheel and source archive. See [python-release.md](python-release.md).
 
 ## One-time registry setup
 
-- Confirm ownership or publishing access to `@samplesift`, and the intended
-  public package name. npm and PyPI ownership are separate.
+- Sign in with an npm account authorized to publish
+  `@microbiome-informatics/samplesift`. npm and PyPI ownership are separate.
 - Create the GitHub environment `npm`, add required reviewers and restrict
   deployment to tags matching `v*`.
 - On the npm package, configure a GitHub Actions trusted publisher with owner
@@ -92,7 +97,9 @@ wheel and source archive. See [python-release.md](python-release.md).
   environment `npm`. These values must match exactly. Enable **direct publishing**
   for this publisher; a staging-only publisher does not complete this workflow.
 
-npm requires an existing package before its trusted publisher can be configured.
+npm requires an existing package before its trusted publisher can be configured,
+including through [`npm trust`](https://docs.npmjs.com/cli/v11/commands/npm-trust/#prerequisites).
+`@microbiome-informatics/samplesift` is still at this initial setup stage.
 For the first release, an authorized npm maintainer therefore needs to publish
 the approved archive using npm's interactive authentication, then configure the
 trusted publisher for later versions. Do not add a long-lived token fallback to
@@ -118,7 +125,7 @@ npm run lint
 npm run build
 npm run build:django
 PLAYWRIGHT_CHANNEL=chrome npm run test:browser
-npm run check:package --workspace @samplesift/components
+npm run check:package --workspace @microbiome-informatics/samplesift
 ```
 
 Omit `PLAYWRIGHT_CHANNEL=chrome` if Playwright's Chromium is installed. These
@@ -151,8 +158,9 @@ the release workflow deliberately publishes a previously checked archive with
 
 The build records license and notice text for bundled dependencies in
 `dist/THIRD_PARTY_NOTICES.txt`, and copies the frontend `LICENSE` alongside it.
-The Django asset build preserves the same notices and build metadata. The two Terra Draw packages omit those files from
-their npm archives, so exact-release copies and their sources are tracked under
+The Django asset build preserves the same notices and build metadata. The two
+Terra Draw packages omit those files from their npm archives, so exact-release
+copies and their sources are tracked under
 `scripts/licenses/`. Review those copies when upgrading the dependencies.
 
 ## Test the archive as a consumer
@@ -161,13 +169,13 @@ Use a fresh application outside this workspace. Install the archive produced
 above, replacing the path in this example with its actual location:
 
 ```sh
-npm install /path/to/samplesift-components-0.1.0.tgz
+npm install /path/to/microbiome-informatics-samplesift-0.1.0.tgz
 ```
 
 Use the package's public entry point in the application's browser JavaScript:
 
 ```js
-import '@samplesift/components';
+import '@microbiome-informatics/samplesift';
 ```
 
 Render the element with an API root that the consumer application can reach:
@@ -192,7 +200,7 @@ Run the consumer's production build and preview. Check that:
 - Compact panels, optional results and full layout work in the host's container.
 - Styling variables and named parts work in the packaged React example, including
   its EBI Visual Framework variant when that stylesheet is installed by the host.
-- The separate `@samplesift/components/data` entry imports without a browser DOM.
+- The separate `@microbiome-informatics/samplesift/data` entry imports without a browser DOM.
 
 The component must be imported on the client in applications with server
 rendering. A same-origin proxy or suitable backend CORS configuration is needed
@@ -200,13 +208,13 @@ for API requests; package installation does not configure the host's API routing
 The package does not provide custom collection authentication headers.
 
 For React, use the files under
-`node_modules/@samplesift/components/examples/styling/react/` or `react-vf/` in
+`node_modules/@microbiome-informatics/samplesift/examples/styling/react/` or `react-vf/` in
 the fresh consumer and follow their packaged guides. Opt into the table explicitly
 when checking table styles. The package is framework-agnostic; React is a host
 example, not a runtime requirement.
 
 For a Django template without a JavaScript bundler, copy the **complete**
-`node_modules/@samplesift/components/dist/` directory to the application's static
+`node_modules/@microbiome-informatics/samplesift/dist/` directory to the application's static
 assets, preserving relative filenames, and load `sample-sift.js` as a module.
 Keep chunks and worker assets with the entry point. Use a static serving setup
 that preserves those URLs, or a bundler that rewrites asset references; Django
@@ -232,7 +240,7 @@ For the initial manual bootstrap described above, publish the **approved archive
 not a newly built directory. With its actual path and the appropriate dist-tag:
 
 ```sh
-npm publish /path/to/approved-package.tgz --ignore-scripts --access public --tag latest
+npm publish /path/to/microbiome-informatics-samplesift-0.1.0.tgz --ignore-scripts --access public --tag latest
 ```
 
 That command uploads the package. Run it only with explicit release approval;
@@ -243,7 +251,7 @@ After publishing, confirm the exact version and dist-tags with `npm view`, then
 perform a fresh registry install in the consumer application:
 
 ```sh
-npm install @samplesift/components@0.1.0
+npm install @microbiome-informatics/samplesift@0.1.0
 ```
 
 Repeat the consumer production build and browser smoke check. The browser entry

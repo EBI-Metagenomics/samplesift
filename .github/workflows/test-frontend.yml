@@ -57,7 +57,7 @@ jobs:
         run: npm run build:django
 
       - name: Check package contents
-        run: npm run check:package --workspace @samplesift/components
+        run: npm run check:package --workspace @microbiome-informatics/samplesift
 
       - name: Pack package (dry run)
         working-directory: frontend/packages/components

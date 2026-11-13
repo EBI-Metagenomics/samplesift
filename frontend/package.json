@@ -5,14 +5,14 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "npm run dev --workspace @samplesift/components",
-    "build": "npm run build --workspace @samplesift/components",
-    "build:django": "npm run build:django --workspace @samplesift/components",
-    "typecheck": "npm run typecheck --workspace @samplesift/components",
-    "test": "npm run test --workspace @samplesift/components",
-    "test:browser": "npm run test:browser --workspace @samplesift/components",
+    "dev": "npm run dev --workspace @microbiome-informatics/samplesift",
+    "build": "npm run build --workspace @microbiome-informatics/samplesift",
+    "build:django": "npm run build:django --workspace @microbiome-informatics/samplesift",
+    "typecheck": "npm run typecheck --workspace @microbiome-informatics/samplesift",
+    "test": "npm run test --workspace @microbiome-informatics/samplesift",
+    "test:browser": "npm run test:browser --workspace @microbiome-informatics/samplesift",
     "lint": "biome lint .",
-    "preview": "npm run preview --workspace @samplesift/components"
+    "preview": "npm run preview --workspace @microbiome-informatics/samplesift"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.13"

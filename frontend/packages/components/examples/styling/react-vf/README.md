@@ -1,6 +1,6 @@
 # React with the EBI Visual Framework
 
-This example connects an existing [Visual Framework 2](https://stable.visual-framework.dev/) theme to SampleSift using CSS variables and named parts. It uses the installed `@samplesift/components` package; it adds no React or Visual Framework dependencies to SampleSift itself.
+This example connects an existing [Visual Framework 2](https://stable.visual-framework.dev/) theme to SampleSift using CSS variables and named parts. It uses the installed `@microbiome-informatics/samplesift` package; it adds no React or Visual Framework dependencies to SampleSift itself.
 
 ## Use in your application
 

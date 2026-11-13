@@ -36,7 +36,7 @@ Both expose the collection events below. The remaining code examples use the **d
 ```
 
 ```js
-import '@samplesift/components';
+import '@microbiome-informatics/samplesift';
 
 const explorer = document.querySelector('#occurrences');
 explorer.options = {
@@ -109,7 +109,7 @@ explorer.setState(state); // Silent, complete state replacement; resets table pa
 
 All names, values, and sort entries must satisfy current metadata. Supported declared value constraints include enums/constants, numeric bounds and `multipleOf`, string length/pattern, and valid calendar dates. The compiler combines predicates with CQL2 `and`; date comparisons use canonical `{ "date": "YYYY-MM-DD" }` literals. `in` uses `[propertyReference, valueArray]`, and `isNull` has one property argument with no value. Inclusive form ranges compile to `>=` and/or `<=`. This is a bounded CQL2 subset, not an arbitrary expression editor.
 
-The compact form edits one condition or one inclusive range per field. Valid saved combinations outside that editor remain visible as read-only cards and continue to filter the query; removing one stages its removal without discarding other fields. Low-level `compileCollectionFilter`, `buildCollectionQuery`, `validateCollectionState`, and `createCollectionDataSource` are available from `@samplesift/components/data`.
+The compact form edits one condition or one inclusive range per field. Valid saved combinations outside that editor remain visible as read-only cards and continue to filter the query; removing one stages its removal without discarding other fields. Low-level `compileCollectionFilter`, `buildCollectionQuery`, `validateCollectionState`, and `createCollectionDataSource` are available from `@microbiome-informatics/samplesift/data`.
 
 ## Spatial capabilities
 
@@ -155,10 +155,10 @@ Restoration requires metadata so unknown fields, unavailable operators, and unsu
 ```
 
 ```js
-import '@samplesift/components';
+import '@microbiome-informatics/samplesift';
 import {
   readCollectionQuery, createCollectionQueryPatch, applyCollectionQueryPatch,
-} from '@samplesift/components/data';
+} from '@microbiome-informatics/samplesift/data';
 
 const namespace = 'left';
 const error = document.querySelector('#collection-url-error');
