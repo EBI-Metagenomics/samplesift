@@ -12,7 +12,8 @@
     "test": "npm run test --workspace @microbiome-informatics/samplesift",
     "test:browser": "npm run test:browser --workspace @microbiome-informatics/samplesift",
     "lint": "biome lint .",
-    "preview": "npm run preview --workspace @microbiome-informatics/samplesift"
+    "preview": "npm run preview --workspace @microbiome-informatics/samplesift",
+    "build:jupyter": "npm run build:jupyter --workspace @microbiome-informatics/samplesift"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.13"

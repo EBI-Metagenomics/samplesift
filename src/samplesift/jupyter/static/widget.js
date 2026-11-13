@@ -1,5 +1,7 @@
-async function render({ model, el }) {
-  await import(/* @vite-ignore */ model.get("component_url"));
+async function render({ model, el }, loadComponent) {
+  const url = model.get("component_url");
+  if (url) await import(/* @vite-ignore */ url);
+  else await loadComponent();
   const component = document.createElement("sample-sift");
   let ready = false;
   let reflecting = false;

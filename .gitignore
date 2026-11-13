@@ -8,6 +8,7 @@ frontend/**/dist/
 .idea
 .idea/*
 src/samplesift/django/static/samplesift/components/
+src/samplesift/jupyter/static/dist/
 
 .mi/
 .ipynb_checkpoints/

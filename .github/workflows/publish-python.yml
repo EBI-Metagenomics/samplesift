@@ -79,6 +79,9 @@ jobs:
       - name: Build Django static components
         run: npm run build:django --prefix frontend
 
+      - name: Build Jupyter widget
+        run: npm run build:jupyter --prefix frontend
+
       - name: Build wheel and source distribution
         run: uv build
 
