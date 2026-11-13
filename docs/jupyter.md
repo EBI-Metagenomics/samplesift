@@ -9,8 +9,9 @@ pip install 'samplesift[jupyter]'
 The wrapper embeds the existing `<sample-sift>` frontend component.
 It contains no separate map or filter compiler.
 Python exports reuse the query compiled by the frontend.
-The frontend module comes from a running frontend server.
-No frontend bundle is included in the Python wheel yet.
+The Python wheel includes a self-contained frontend bundle.
+No Vite server or Node.js installation is required after installation.
+The bundle includes component styles, lazy form widgets, and the MapLibre worker.
 Jupyter does not download or bundle a separate OBIS dataset.
 The example queries the shared backend's existing OBIS fixture.
 
@@ -19,17 +20,17 @@ The example queries the shared backend's existing OBIS fixture.
 Run these setup commands from the repository root:
 
 ```sh
-task frontend:setup
 task jupyter:setup
 ```
 
-Start the OBIS backend and Vite in one terminal:
+Setup installs frontend dependencies and builds the Jupyter bundle.
+Start the OBIS backend:
 
 ```sh
-task dev
+task backend:up
 ```
 
-Start the example notebook in another terminal:
+Start the example notebook:
 
 ```sh
 task jupyter:lab
@@ -38,13 +39,13 @@ task jupyter:lab
 The server, kernel, and widget extensions share the project Python environment.
 The notebook development group also installs pandas and GeoPandas for the examples.
 Select that Python kernel in JupyterLab.
-The example uses the real OBIS collection through the Vite proxy:
+The example uses the real OBIS collection directly:
 
 ```python
 from samplesift.jupyter import SampleSift
 
 widget = SampleSift(
-    api_url="http://127.0.0.1:5173/samplesift",
+    api_url="http://127.0.0.1:8002/samplesift",
     collection="occurrences",
     tile_layer="occurrences",
     query_state={
@@ -56,16 +57,39 @@ widget = SampleSift(
 widget
 ```
 
-Keep `task dev` running while using the notebook.
-
-Use the Vite port in `api_url`, not the backend port.
-Vite forwards API requests to the backend and allows local notebook `QUERY` preflights.
+The backend stays running after `task backend:up` returns.
+Use `task backend:down` after the notebook session.
+The example backend allows local notebook origins and HTTP `QUERY` preflights.
+Set `api_url` to the backend port when overriding `SAMPLESIFT_BACKEND_PORT`.
 Low zoom levels show backend clusters; higher zoom levels show individual records.
+Map services and the collection API still require network access.
 
-Vite serves the real component and its worker assets.
-The default module URL is `http://127.0.0.1:5173/src/index.ts`.
-For another Vite port, set `component_url` when creating the widget.
-The browser must reach that server and the component's map services.
+After frontend changes, rebuild the widget:
+
+```sh
+task jupyter:build
+```
+
+Create a new widget after rebuilding.
+For frontend hot reload, start Vite with `task frontend:dev`.
+Then explicitly set `component_url="http://127.0.0.1:5173/src/index.ts"` before display.
+An empty `component_url` selects the bundled component.
+
+## Python packaging
+
+```sh
+task build
+python scripts/check-python-package.py dist
+```
+
+`task build` builds both Django and Jupyter assets before `uv build`.
+The release workflow uses the same frontend build commands.
+The Jupyter build reuses the component source and Django's license-notice preparation script.
+Its single module embeds lazy imports and the worker URL for anywidget's blob-module loading.
+The Django build retains separate JavaScript chunks and worker files.
+Both wheels and source distributions include the generated assets and third-party notices.
+A wheel rebuild from the source distribution needs no Node.js installation.
+A raw `uv build` in a checkout requires previously generated frontend assets.
 
 ## Thin component wrapper
 
@@ -205,11 +229,7 @@ Exports load the matching rows into memory.
 They are not transactional database snapshots.
 Changed totals, repeated record identities, and incomplete pagination raise errors instead of returning a partial export.
 
-## Golem widget loading
-
-Vite pre-bundles Golem's lazy widget loaders before notebook imports.
-After changing frontend dependencies, restart Vite and reload the notebook browser tab.
-An old module graph can otherwise produce `504 Outdated Optimize Dep` and a Golem grid error.
+## Collection API access
 
 For collection mode, supply the existing component's API configuration:
 
@@ -222,11 +242,12 @@ widget = SampleSift(
 widget
 ```
 
-The API URL is resolved by the browser, not Python.
-Jupyter and Vite have different origins.
-Remote APIs must allow the notebook origin and HTTP `QUERY` preflights.
-The development Vite server allows localhost notebook origins.
-Its worker URLs resolve against Vite, independently of the notebook URL.
+The browser uses `api_url` for maps and tables.
+The kernel also uses this URL for Python exports.
+APIs must allow the notebook origin and HTTP `QUERY` preflights.
+The local OBIS example includes this CORS configuration.
+It uses `django-cors-headers` with local origins and HTTP `QUERY` enabled.
+Deployed APIs need their own CORS configuration.
 
 ## Jupyter extension-manager errors
 
@@ -244,10 +265,13 @@ Installed widget extensions still load with that manager.
 
 ```sh
 task jupyter:test
+node --test frontend/tests/jupyter-bundle.test.mjs
 task build
 ```
 
 The Python tests check synced traits, widget MIME data, and notebook code.
+The browser test checks blob-module rendering and the embedded worker without Vite.
+Install Chromium with `task frontend:browser:setup` before the browser test.
 The wrapper requires a frontend with widget support, such as JupyterLab.
 For separate server and kernel environments, install anywidget in both environments.
 Restart JupyterLab after installing its widget extensions.

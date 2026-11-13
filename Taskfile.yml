@@ -98,9 +98,17 @@ tasks:
       - task: frontend:test
 
   jupyter:setup:
-    desc: Install JupyterLab and optional widget dependencies
+    desc: Install JupyterLab and build the bundled widget
     cmds:
+      - task: frontend:setup
+      - task: jupyter:build
       - uv sync --locked --extra jupyter --group notebook
+
+  jupyter:build:
+    desc: Build the self-contained Jupyter frontend
+    dir: frontend
+    cmds:
+      - npm run build:jupyter
 
   jupyter:lab:
     desc: Open the SampleSift widget example in JupyterLab
@@ -114,8 +122,11 @@ tasks:
       - node --test tests/jupyter-widget.test.mjs
 
   build:
-    desc: Build the Python wheel and source distribution
+    desc: Build frontend assets, the Python wheel, and the source distribution
     cmds:
+      - task: frontend:setup
+      - cmd: npm run build:django --prefix frontend
+      - task: jupyter:build
       - uv build {{.CLI_ARGS}}
 
   hooks:install:
