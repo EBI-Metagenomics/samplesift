@@ -1,7 +1,7 @@
 # Tile caching
 
 This document explains how SampleSift caches vector tiles for spatial collections,
-how cached tiles are invalidated, and how `samplesift_sync_schema` prewarms the
+how cached tiles are invalidated, and how the schema and content sync commands prewarm the
 cache. The [collection documentation](django-collections.md#api-settings) summarises
 the settings. This document describes the mechanism behind them.
 
@@ -180,6 +180,10 @@ For every spatial API collection, it stores each non-empty tile of the **unfilte
 query for zooms `0` to `SAMPLESIFT_CLUSTER_MAX_ZOOM`, then prints the number of tiles
 it stored.
 
+`samplesift_sync_content` also prewarms after refreshing rows and removing orphans.
+It warms only the selected spatial collections, using their updated versions.
+The same cache requirement and `--no-warm-cache` option apply.
+
 ### Cluster once per zoom
 
 An on-demand clustered tile runs `ST_ClusterDBSCAN` over the whole filtered
@@ -251,6 +255,8 @@ high zooms, the cost is dominated by the number of non-empty tiles.
 
 Any write changes the version, so warm *after* data changes:
 
+- Run `samplesift_sync_content` after bulk imports into source tables or changes to resolver code.
+  It refreshes collection rows and then prewarms their tiles.
 - Run `samplesift_sync_schema` after bulk loads or reconciliation. Deployment scripts
   that load data after creating the schema can run
   `samplesift_sync_schema --no-warm-cache` first and the plain command afterwards, as

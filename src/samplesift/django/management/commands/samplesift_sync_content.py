@@ -8,13 +8,14 @@ from django.core.exceptions import ImproperlyConfigured
 from django.core.management.base import BaseCommand, CommandError, CommandParser
 from django.db import connections
 
+from ...cache import tile_cache, warm_collection
 from ...registry import registry
 
 
 class Command(BaseCommand):
     """Refresh one named collection or every registered collection."""
 
-    help = "Synchronise collection content from source rows and remove orphaned collection rows."
+    help = "Synchronise collection content, remove orphaned rows, and prewarm cached tiles."
 
     def add_arguments(self, parser: CommandParser) -> None:
         """Accept an optional collection API name."""
@@ -22,6 +23,11 @@ class Command(BaseCommand):
             "collection",
             nargs="?",
             help="Collection API name; defaults to all collections.",
+        )
+        parser.add_argument(
+            "--no-warm-cache",
+            action="store_true",
+            help="Skip prewarming the tile cache.",
         )
 
     def handle(self, *args: Any, **options: Any) -> None:
@@ -80,3 +86,21 @@ class Command(BaseCommand):
                 f"Synced {collection.api_name()}: {len(source_ids)} source rows; "
                 f"removed {removed} orphaned rows."
             )
+            if (
+                not options["no_warm_cache"]
+                and collection.geometry is not None
+                and tile_cache() is not None
+            ):
+                from ...api import _zoom_tiles
+
+                query = rows.all()
+                counts = warm_collection(
+                    collection,
+                    lambda z, collection=collection, query=query: _zoom_tiles(
+                        collection, query, z
+                    ),
+                )
+                self.stdout.write(
+                    f"Warmed {sum(counts.values())} tiles for {collection.api_name()} "
+                    f"(zoom 0-{max(counts)})"
+                )
