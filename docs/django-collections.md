@@ -189,12 +189,27 @@ Django application initialisation alone does not query collection storage.
 ### Schema validation and cache setup
 
 The command enables the `postgis` extension and creates missing registered
-collection tables. For spatial collections it also installs the write-version table
+collection tables. It explicitly creates declared collection indexes, including the spatial GiST index.
+Runtime models remain unmanaged by Django migrations.
+Django's normal table creation skips indexes on unmanaged models, so the command creates these indexes separately.
+Run the command again to repair indexes missing from existing tables:
+
+```shell
+python manage.py samplesift_sync_schema --no-warm-cache
+```
+
+Existing declared indexes must have the expected columns and access method.
+Invalid, partial, expression-based, or incompatible indexes produce an index drift error.
+The command preserves compatible indexes on subsequent runs.
+Index creation uses normal PostgreSQL DDL and can block writes on a populated table.
+Schedule large-table repairs during maintenance.
+
+For spatial collections it also installs the write-version table
 and triggers used by the tile cache. When a cache is configured, it then prewarms
 the cache with unfiltered tiles; pass `--no-warm-cache` to skip this (see
 [Tile caching](tile-cache.md)). It reports missing, extra, type-incompatible, or
 nullability-incompatible columns as schema drift, including point geometry subtype and SRID. It does not alter or drop
-existing tables. The database user therefore needs permission to create the
+existing table columns. The database user therefore needs permission to create the
 PostGIS extension.
 
 ## Synchronisation semantics and limits
@@ -317,7 +332,13 @@ Each API collection has discovery and two static `QUERY` endpoints:
   chains of nearby points form one cluster, so a cluster can span more than 40
   pixels. Clustering considers the entire filtered collection before selecting
   cluster centroids for a tile, ensuring adjacent tiles agree on membership. This
-  can be expensive for large collections. By default, at zoom 15 and above it returns
+  can be expensive for large collections. Each query materializes the matching points
+  and their Web Mercator projection once, before the ordered clustering window.
+  Centroids reuse those projected coordinates.
+  Ordering from the input queryset is discarded; clustering retains stable source-key ordering.
+  This permits spatial filtering before sorting and prevents duplicate coordinate transformations.
+  An uncached single-tile request still clusters the whole filtered collection.
+  By default, at zoom 15 and above it returns
   individual points. Cluster IDs depend on membership and are not permanent.
 - `QUERY /samplesift/collections/{api_name}/results` returns individual rows selected only by the body
   filters, ordering, and pagination; it is independent of map bounds.
