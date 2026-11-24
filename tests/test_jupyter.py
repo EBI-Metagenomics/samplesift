@@ -35,7 +35,14 @@ def test_widget_configuration_is_synced() -> None:
 def test_widget_exposes_frontend_and_display_mime() -> None:
     widget = SampleSift(demo=True)
     try:
-        assert widget.get_state()["_esm"]
+        state = widget.get_state()
+        assert state["component_url"] == ""
+        bundle_path = (
+            Path(__file__).parents[1] / "src/samplesift/jupyter/static/dist/widget.js"
+        )
+        assert state["_esm"] == bundle_path.read_text()
+        assert "data:" in state["_esm"]
+        assert "127.0.0.1:5173" not in state["_esm"]
         bundle, _ = widget._repr_mimebundle_()
         assert (
             bundle["application/vnd.jupyter.widget-view+json"]["model_id"]
@@ -124,7 +131,7 @@ def test_example_notebook_code(monkeypatch, tmp_path) -> None:
         assert isinstance(namespace["widget"], SampleSift)
         widget = namespace["widget"]
         assert widget.demo is False
-        assert widget.api_url == "http://127.0.0.1:5173/samplesift"
+        assert widget.api_url == "http://127.0.0.1:8002/samplesift"
         assert widget.collection == widget.tile_layer == "occurrences"
         assert widget.query_state["predicates"] == [
             {"field": "depth", "operator": ">=", "value": 50}
@@ -350,3 +357,14 @@ def test_region_interfaces_preserve_filters_and_reject_unsupported_shapes(
         export_widget.set_selection({"type": "Polygon", "coordinates": [[], []]})
     export_widget.set_selection(None)
     assert export_widget.query_state["selection"] is None
+
+
+def test_missing_bundle_reports_setup_command(monkeypatch) -> None:
+    monkeypatch.setattr(Path, "is_file", lambda self: False)
+    with pytest.raises(FileNotFoundError, match="task jupyter:setup"):
+        SampleSift()
+    widget = SampleSift(component_url="http://localhost:5173/src/index.ts")
+    try:
+        assert widget.component_url.endswith("/src/index.ts")
+    finally:
+        widget.close()

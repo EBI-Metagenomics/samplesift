@@ -81,12 +81,14 @@ From a source checkout, install the notebook environment:
 task jupyter:setup
 ```
 
-Keep `task dev` running in one terminal.
-Open the example notebook in another terminal:
+Start the example backend, then open the notebook:
 
 ```sh
+task backend:up
 task jupyter:lab
 ```
+
+The widget includes its frontend bundle. Vite is not required.
 
 The [example notebook](examples/jupyter.ipynb) demonstrates filters, polygon searches, linked sliders, and DataFrame exports.
 See [Jupyter setup and limits](docs/jupyter.md) for widget configuration and Python bindings.

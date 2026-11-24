@@ -16,7 +16,7 @@ __all__ = ["SampleSift"]
 class SampleSift(anywidget.AnyWidget):
     """Embed the existing frontend component in a notebook cell.
 
-    :param component_url: Frontend module URL, served by Vite by default.
+    :param component_url: Optional frontend module URL; defaults to the bundled component.
         Set this before displaying the widget.
     :param demo: Enable the component's existing synthetic demo data.
     :param api_url: Browser-accessible collection API root.
@@ -27,7 +27,7 @@ class SampleSift(anywidget.AnyWidget):
 
     _esm = Path(__file__).parent / "static" / "widget.js"
 
-    component_url = Unicode("http://127.0.0.1:5173/src/index.ts").tag(sync=True)
+    component_url = Unicode("").tag(sync=True)
     demo = Bool(False).tag(sync=True)
     api_url = Unicode("").tag(sync=True)
     collection = Unicode("").tag(sync=True)
@@ -37,6 +37,17 @@ class SampleSift(anywidget.AnyWidget):
     query_error = Unicode("").tag(sync=True)
     page = Dict().tag(sync=True)
     tile_status = Dict().tag(sync=True)
+
+    def __init__(self, **kwargs: Any) -> None:
+        if not kwargs.get("component_url"):
+            bundle = Path(__file__).parent / "static" / "dist" / "widget.js"
+            if not bundle.is_file():
+                raise FileNotFoundError(
+                    "The Jupyter frontend is missing. Run task jupyter:setup "
+                    "in a source checkout, or reinstall samplesift[jupyter]."
+                )
+            kwargs["_esm"] = bundle.read_text(encoding="utf-8")
+        super().__init__(**kwargs)
 
     @default("query_state")
     def _default_query_state(self) -> dict[str, Any]:

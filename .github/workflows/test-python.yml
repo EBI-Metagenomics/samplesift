@@ -90,6 +90,11 @@ jobs:
         with:
           node-version: 24
 
+      - name: Build Jupyter widget
+        run: |
+          npm ci --prefix frontend
+          npm run build:jupyter --prefix frontend
+
       - name: Test Jupyter wrapper
         run: |
           uv run --locked --extra jupyter --group notebook pytest -p no:django tests/test_jupyter.py
@@ -106,8 +111,22 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@v10.3.3
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Build Python frontends
+        run: |
+          npm ci --prefix frontend
+          npm run build:django --prefix frontend
+          npm run build:jupyter --prefix frontend
+
       - name: Build wheel and source distribution
         run: uv build
+
+      - name: Check distribution contents
+        run: python scripts/check-python-package.py dist
 
       - name: Import the built wheel
         run: |
