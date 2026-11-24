@@ -1,6 +1,6 @@
 import type { Point, Polygon } from 'geojson';
 
-export type FieldKind = 'number' | 'integer' | 'string' | 'date' | 'boolean';
+export type FieldKind = 'number' | 'integer' | 'string' | 'date' | 'date-time' | 'boolean';
 export type Operator = '=' | '<>' | 'in' | 'isNull' | '>' | '>=' | '<' | '<=';
 export type Scalar = string | number | boolean;
 export type ScalarOperator = Exclude<Operator, 'in' | 'isNull'>;
