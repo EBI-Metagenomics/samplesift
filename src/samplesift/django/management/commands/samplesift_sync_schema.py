@@ -5,6 +5,9 @@ from __future__ import annotations
 from django.core.exceptions import ImproperlyConfigured
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connections
+from django.db.backends.base.base import BaseDatabaseWrapper
+from django.db.backends.base.schema import BaseDatabaseSchemaEditor
+from django.db.models import Model
 
 from ...cache import tile_cache, version_ddl, warm_collection
 from ...registry import registry
@@ -42,8 +45,10 @@ class Command(BaseCommand):
                     drift = self._drift(connection, model)
                     if drift:
                         raise CommandError(
-                            f"Schema drift for {model._meta.db_table}: " + "; ".join(drift)
+                            f"Schema drift for {model._meta.db_table}: "
+                            + "; ".join(drift)
                         )
+                self._ensure_indexes(connection, editor, model)
                 if collection.geometry is not None:
                     # Tile cache keys use the table's last-write timestamp.
                     for sql, params in version_ddl(model._meta.db_table):
@@ -52,6 +57,50 @@ class Command(BaseCommand):
         if not options["no_warm_cache"] and tile_cache() is not None:
             self._warm(alias)
 
+    def _ensure_indexes(
+        self,
+        connection: BaseDatabaseWrapper,
+        editor: BaseDatabaseSchemaEditor,
+        model: type[Model],
+    ) -> None:
+        """Create missing declared indexes and reject incompatible indexes.
+
+        :param connection: The collection database connection.
+        :param editor: The active schema editor.
+        :param model: An unmanaged collection model.
+        :raises CommandError: If an existing index has an incompatible definition.
+        """
+        with connection.cursor() as cursor:
+            constraints = connection.introspection.get_constraints(
+                cursor, model._meta.db_table
+            )
+            for index in model._meta.indexes:
+                actual = constraints.get(index.name)
+                if actual is None:
+                    # create_model() skips declared indexes on unmanaged models.
+                    editor.add_index(model, index)
+                    self.stdout.write(f"Created index {index.name}")
+                    continue
+                expected_columns = [
+                    model._meta.get_field(name).column for name in index.fields
+                ]
+                if (
+                    not actual["index"]
+                    or actual["columns"] != expected_columns
+                    or actual["type"] != index.suffix
+                ):
+                    raise CommandError(
+                        f"Index drift for {model._meta.db_table}: {index.name}"
+                    )
+                cursor.execute(
+                    "SELECT indisvalid, indisready, indpred IS NULL, indexprs IS NULL FROM pg_index WHERE indexrelid = %s::regclass",
+                    [connection.ops.quote_name(index.name)],
+                )
+                if cursor.fetchone() != (True, True, True, True):
+                    raise CommandError(
+                        f"Index drift for {model._meta.db_table}: {index.name} is invalid, partial, or expression-based"
+                    )
+
     def _warm(self, alias: str) -> None:
         from ...api import _zoom_tiles
 
@@ -59,7 +108,9 @@ class Command(BaseCommand):
             query = registry.get_model(collection)._default_manager.using(alias).all()
             counts = warm_collection(
                 collection,
-                lambda z, collection=collection, query=query: _zoom_tiles(collection, query, z),
+                lambda z, collection=collection, query=query: _zoom_tiles(
+                    collection, query, z
+                ),
             )
             self.stdout.write(
                 f"Warmed {sum(counts.values())} tiles for {collection.api_name()} "
@@ -70,12 +121,17 @@ class Command(BaseCommand):
         # The command only accepts PostgreSQL above; Django's standard
         # introspection interface gives a portable enough type/nullability check.
         description = connection.introspection.get_table_description(  # type: ignore[attr-defined]
-            connection.cursor(), model._meta.db_table  # type: ignore[attr-defined]
+            connection.cursor(),
+            model._meta.db_table,  # type: ignore[attr-defined]
         )
         actual = {column.name: column for column in description}
         expected = {field.column: field for field in model._meta.local_fields}  # type: ignore[attr-defined]
-        messages = [f"missing column {name}" for name in expected.keys() - actual.keys()]
-        messages.extend(f"unexpected column {name}" for name in actual.keys() - expected.keys())
+        messages = [
+            f"missing column {name}" for name in expected.keys() - actual.keys()
+        ]
+        messages.extend(
+            f"unexpected column {name}" for name in actual.keys() - expected.keys()
+        )
         for name in expected.keys() & actual.keys():
             actual_type = connection.introspection.get_field_type(  # type: ignore[attr-defined]
                 actual[name].type_code, actual[name]
@@ -94,7 +150,9 @@ class Command(BaseCommand):
                 if row and row[0].lower() == expected[name].db_type(connection).lower():
                     actual_type = expected_type
             if actual_type != expected_type:
-                messages.append(f"column {name} has type {actual_type}, expected {expected_type}")
+                messages.append(
+                    f"column {name} has type {actual_type}, expected {expected_type}"
+                )
             if actual[name].null_ok != expected[name].null:
                 messages.append(f"column {name} has incompatible nullability")
         return messages

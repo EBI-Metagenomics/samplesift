@@ -479,19 +479,28 @@ def _clusters_sql(
     connection = connections[registry.target_database()]
     quote = connection.ops.quote_name
     fields = ["source_pk", *_public_fields(collection)]
-    base_sql, base_params = query.values(*fields, "geometry").query.sql_with_params()
+    base_sql, base_params = query.order_by().values(*fields, "geometry").query.sql_with_params()
     grid_size = WEB_MERCATOR_INITIAL_RESOLUTION / (2**z) * get_settings().cluster_radius_pixels
+    projected_name = "_samplesift_projected_geometry"
+    while projected_name in fields:
+        projected_name = "_" + projected_name
+    projected = quote(projected_name)
     grouped = ", ".join(
         f"CASE WHEN count(*) = 1 THEN (array_agg({quote(field)}))[1] END AS {quote(field)}"
         for field in fields
     )
-    sql = f"""WITH filtered AS ({base_sql}), grouped AS (
-        SELECT ST_ClusterDBSCAN(ST_Transform(geometry, {WEB_MERCATOR_SRID}), eps := %s, minpoints := 1)
+    # The fence keeps filtering and projection before DBSCAN's ordered window.
+    # Centroids reuse the same projected points instead of transforming them again.
+    sql = f"""WITH filtered AS MATERIALIZED (
+        SELECT source.*, ST_Transform(geometry, {WEB_MERCATOR_SRID}) AS {projected}
+        FROM ({base_sql}) AS source
+    ), grouped AS (
+        SELECT ST_ClusterDBSCAN({projected}, eps := %s, minpoints := 1)
             OVER (ORDER BY source_pk) AS cell, * FROM filtered
     ), clusters AS (
         SELECT {grouped}, count(*) > 1 AS cluster, count(*) AS point_count,
         md5(min(source_pk)) AS cluster_id,
-        ST_Centroid(ST_Collect(ST_Transform(geometry, {WEB_MERCATOR_SRID}))) AS centroid
+        ST_Centroid(ST_Collect({projected})) AS centroid
         FROM grouped GROUP BY cell
     )"""
     return sql, [*base_params, grid_size]
@@ -509,16 +518,27 @@ def _tile_aggregate() -> str:
 
 
 def _zoom_tiles(
-    collection: type[SampleSiftCollection], query: QuerySet[models.Model], z: int
+    collection: type[SampleSiftCollection], query: QuerySet[models.Model], z: int,
+    *, tiles: list[tuple[int, int]] | None = None,
 ) -> Iterator[tuple[str | None, int, int, bytes]]:
     """Yield ``(version, x, y, tile)`` for every non-empty clustered tile at ``z``.
 
+    ``tiles`` optionally restricts output to selected tile coordinates.
+    The input to clustering remains the whole filtered collection.
     Clustering runs once for the zoom instead of once per tile. Each centroid is
     offered to the tiles around its position; ST_AsMVTGeom then keeps exactly the
     tiles an on-demand request would include it in. The version is selected in
     the same statement, so it describes the snapshot the tiles were built from.
     """
     connection = connections[registry.target_database()]
+    if tiles == []:
+        return
+    target_clause = ""
+    target_params = []
+    if tiles is not None:
+        placeholders = ", ".join("(%s, %s)" for _ in tiles)
+        target_clause = f" AND (placed.tx, placed.ty) IN ({placeholders})"
+        target_params = [value for tile in tiles for value in tile]
     clusters_sql, clusters_params = _clusters_sql(collection, query, z)
     # Fractional tile coordinates. ST_AsMVTGeom snaps to the MVT grid, so a centroid
     # within half a tile pixel of an edge lands on it in both tiles; a one-pixel margin
@@ -545,9 +565,9 @@ def _zoom_tiles(
             SELECT {_feature_columns(collection, "placed")},
             ST_AsMVTGeom(placed.centroid, ST_TileEnvelope(%s, placed.tx, placed.ty), {MVT_EXTENT}, 0, true) AS geom
         ) AS tile
-        WHERE tile.geom IS NOT NULL
+        WHERE tile.geom IS NOT NULL{target_clause}
         GROUP BY placed.tx, placed.ty"""
-    params = [*clusters_params, collection.table_name(), collection.api_name(), z]
+    params = [*clusters_params, collection.table_name(), collection.api_name(), z, *target_params]
     with connection.chunked_cursor() as cursor:
         cursor.execute(sql, params)
         for version, x, y, tile in cursor:

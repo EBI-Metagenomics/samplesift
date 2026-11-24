@@ -182,6 +182,7 @@ def test_tile_clustering_uses_configured_zoom_and_radius(settings, monkeypatch) 
     cursor.fetchone.return_value = (b"tile",)
     monkeypatch.setattr("samplesift.django.api.connections", {"configured": connection})
     query = MagicMock()
+    query.order_by.return_value = query
     query.values.return_value.query.sql_with_params.return_value = ("SELECT 1", [])
     query.filter.return_value.values.return_value.query.sql_with_params.return_value = ("SELECT 1", [])
 

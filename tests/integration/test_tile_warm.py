@@ -97,6 +97,12 @@ def test_zoom_tiles_match_on_demand_tiles(warm_registry):
             assert tile_version == version
             warmed[(x, y)] = tile
         assert warmed
+        wanted = {(0, 0), (2**z - 1, 2**z - 1), next(iter(warmed))}
+        restricted = {
+            (x, y): tile for _, x, y, tile in _zoom_tiles(WarmCollection, query, z, tiles=sorted(wanted))
+        }
+        assert restricted == {xy: tile for xy, tile in warmed.items() if xy in wanted}
+        assert list(_zoom_tiles(WarmCollection, query, z, tiles=[])) == []
         for x in range(2**z):
             for y in range(2**z):
                 assert warmed.pop((x, y), b"") == _mvt(WarmCollection, query, z, x, y), (z, x, y)
@@ -120,3 +126,37 @@ def test_sync_schema_warms_empty_query_tiles(warm_registry, settings, monkeypatc
     model.objects.filter(source_pk="p0").delete()
     _cached_mvt(WarmCollection, {}, 0, 0, 0)
     build.assert_called_once()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_cluster_query_transforms_each_matching_point_once(warm_registry) -> None:
+    """Reuse projected coordinates for clustering and centroid calculation."""
+    from samplesift.django.api import _clusters_sql
+
+    model = warm_registry
+    call_command("samplesift_sync_schema", no_warm_cache=True)
+    _populate(model)
+    query = model.objects.filter(label="l0")
+    sql, params = _clusters_sql(WarmCollection, query, 3)
+    with connection.cursor() as cursor:
+        cursor.execute("CREATE TEMP TABLE transform_calls (called integer)")
+        cursor.execute("""
+            CREATE FUNCTION pg_temp.count_transform(point geometry, srid integer)
+            RETURNS geometry LANGUAGE plpgsql VOLATILE AS $$
+            BEGIN
+                INSERT INTO transform_calls VALUES (1);
+                RETURN ST_Transform(point, srid);
+            END $$
+        """)
+        try:
+            cursor.execute(
+                sql.replace("ST_Transform", "pg_temp.count_transform")
+                + " SELECT sum(ST_X(centroid)) FROM clusters",
+                params,
+            )
+            cursor.fetchone()
+            cursor.execute("SELECT count(*) FROM transform_calls")
+            assert cursor.fetchone()[0] == query.count()
+        finally:
+            cursor.execute("DROP FUNCTION pg_temp.count_transform(geometry, integer)")
+            cursor.execute("DROP TABLE transform_calls")

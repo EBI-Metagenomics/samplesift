@@ -203,6 +203,11 @@ candidate tiles per centroid ──► ST_AsMVTGeom(centroid, ST_TileEnvelope(z,
 GROUP BY (tx, ty) ──► ST_AsMVT(... ORDER BY cluster_id) ──► (version, x, y, bytes)
 ```
 
+- **Projection.** Matching rows and their projected coordinates are materialized once per statement.
+  Clustering and centroid calculation share that projection.
+  Spatial selection precedes the stable source-key sort.
+  The internal zoom builder can restrict output to requested tile coordinates.
+  That restriction preserves whole-filtered-collection memberships.
 - **Clustering.** The `filtered`, `grouped` and `clusters` CTEs are produced by the same
   function (`_clusters_sql`) that on-demand tiles use. The two paths therefore cannot
   disagree about membership, properties or cluster IDs.
