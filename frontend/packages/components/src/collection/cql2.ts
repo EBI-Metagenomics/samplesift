@@ -87,7 +87,7 @@ export function validateCollectionState(
   }
 }
 function literal(field: QueryableField, value: Scalar): unknown {
-  return field.kind === 'date' ? { date: value } : value;
+  return field.kind === 'date' ? { date: value } : field.kind === 'date-time' ? { timestamp: value } : value;
 }
 function compilePredicate(predicate: Predicate, metadata: CollectionMetadata): CqlExpression {
   const property = { property: predicate.field };
@@ -134,10 +134,11 @@ function propertyName(value: unknown): string {
   return value.property;
 }
 function decodeLiteral(value: unknown, field: QueryableField): Scalar {
-  if (field.kind === 'date') {
-    if (!isRecord(value) || Object.keys(value).length !== 1 || typeof value.date !== 'string') throw new Error(`${field.name} requires a CQL2 date literal.`);
-    validateFieldValue(field, value.date);
-    return value.date;
+  if (field.kind === 'date' || field.kind === 'date-time') {
+    const key = field.kind === 'date' ? 'date' : 'timestamp';
+    if (!isRecord(value) || Object.keys(value).length !== 1 || typeof value[key] !== 'string') throw new Error(`${field.name} requires a CQL2 ${key} literal.`);
+    validateFieldValue(field, value[key]);
+    return value[key];
   }
   validateFieldValue(field, value);
   return value;

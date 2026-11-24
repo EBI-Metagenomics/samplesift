@@ -15,7 +15,7 @@ export function fieldLabel(field: { name: string; title?: string }): string {
 
 function displayValue(value: Scalar, field: QueryableField | undefined): string {
   if (typeof value !== 'string') return String(value);
-  return field?.kind === 'date' ? value : JSON.stringify(value);
+  return field?.kind === 'date' || field?.kind === 'date-time' ? value : JSON.stringify(value);
 }
 
 function conditionSummary(predicate: Predicate, field: QueryableField | undefined): string {

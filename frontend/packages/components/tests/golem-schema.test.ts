@@ -57,6 +57,24 @@ describe('backend-driven Golem filter form', () => {
     expect(() => formDataToPredicates(draft, fields)).toThrow('valid date');
   });
 
+  it('uses the existing calendar picker with UTC wall time and explicit timestamp lists', () => {
+    const fields: QueryableField[] = [{ name: 'updated_at', kind: 'date-time', nullable: true, operators: ['=', '>=', '<=', 'in', 'isNull'] }];
+    expect(defaultFilterOperator(fields[0])).toBe('range');
+    const definition = JSON.stringify(createCollectionFilterDefinition(fields));
+    expect(definition).toContain('dateTimePicker');
+    expect(definition).toContain('UTC');
+    expect(formDataToPredicates({ f0: { operator: 'range', minimum: '2026-11-12T12:30' } }, fields))
+      .toEqual([{ field: 'updated_at', operator: '>=', value: '2026-11-12T12:30:00Z' }]);
+    const predicates: Predicate[] = [{ field: 'updated_at', operator: '=', value: '2026-11-12T12:30:04.252388+02:00' }];
+    const draft = predicatesToFormData(predicates, fields);
+    expect(draft.f0.value).toBe('2026-11-12T10:30:04.252388');
+    expect(formDataToPredicates(draft, fields)[0]).toMatchObject({ value: '2026-11-12T10:30:04.252388Z' });
+    expect(() => formDataToPredicates({ f0: { operator: 'in', values: ['2026-11-12T12:30'] } }, fields)).toThrow();
+    expect(() => formDataToPredicates({ f0: { operator: 'range', minimum: '2026-11-12T12:30:00Z', maximum: '2026-11-12T12:00:00Z' } }, fields)).toThrow();
+    // Different UTC offsets must be compared as instants, rather than text.
+    expect(() => formDataToPredicates({ f0: { operator: 'range', minimum: '2026-11-12T12:00:00+02:00', maximum: '2026-11-12T11:00:00Z' } }, fields)).not.toThrow();
+  });
+
   it('distinguishes no filter, explicit null, zero and false', () => {
     expect(formDataToPredicates(data(), fields)).toEqual([]);
     const draft = data();

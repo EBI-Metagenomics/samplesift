@@ -21,7 +21,8 @@ const scalarConstraints = ['enum', 'const', 'minimum', 'maximum', 'exclusiveMini
 function valueSchema(field: QueryableField): JsonSchema {
   const schema: JsonSchema = field.kind === 'date'
     ? { type: 'string', format: 'date', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'Use YYYY-MM-DD.' }
-    : field.kind === 'boolean' ? { type: 'boolean', enum: [true, false] } : { type: field.kind };
+    : field.kind === 'date-time' ? { type: 'string', format: 'date-time', description: 'Date and time in UTC.' }
+      : field.kind === 'boolean' ? { type: 'boolean', enum: [true, false] } : { type: field.kind };
   for (const key of scalarConstraints) {
     const value = field.schema?.[key];
     if (value === undefined || (key === 'const' && value === null)) continue;
@@ -31,7 +32,7 @@ function valueSchema(field: QueryableField): JsonSchema {
 }
 
 export function defaultFilterOperator(field: QueryableField): Operator | 'range' {
-  if (['number', 'integer', 'date'].includes(field.kind) && supportsRange(field)
+  if (['number', 'integer', 'date', 'date-time'].includes(field.kind) && supportsRange(field)
     && !field.schema?.enum && field.schema?.const === undefined) return 'range';
   if (field.operators.includes('=')) return '=';
   const operator = field.operators[0];
@@ -69,10 +70,11 @@ export function deriveCollectionFilterSchema(fields: readonly QueryableField[], 
           type: 'array', title: compact ? 'Values' : `${title}: values`, items: { type: 'string' },
           description: field.kind === 'boolean' ? 'Enter true or false; press Enter after each value.'
             : field.kind === 'date' ? 'Use YYYY-MM-DD; press Enter after each date.'
+              : field.kind === 'date-time' ? 'Use ISO timestamps with Z or a UTC offset; press Enter after each timestamp.'
               : 'Press Enter after each value.',
         },
-        minimum: { ...valueSchema(field), title: compact ? (field.kind === 'date' ? 'From' : 'Minimum') : `${title}: minimum` },
-        maximum: { ...valueSchema(field), title: compact ? (field.kind === 'date' ? 'To' : 'Maximum') : `${title}: maximum` },
+        minimum: { ...valueSchema(field), title: compact ? (field.kind.startsWith('date') ? 'From' : 'Minimum') : `${title}: minimum` },
+        maximum: { ...valueSchema(field), title: compact ? (field.kind.startsWith('date') ? 'To' : 'Maximum') : `${title}: maximum` },
       },
     };
   });
@@ -101,6 +103,7 @@ export function createCollectionFilterDefinition(fields: readonly QueryableField
     for (const widget of widgets) {
       if (widget.children) decorate(widget.children);
       if (widget.kind !== 'input' || !widget.path) continue;
+      if (widget.type === 'dateTimePicker') widget.props = { ...widget.props, hourFormat: '24', minuteStep: 1 };
       const [key, part] = widget.path.split('.');
       widget.on = { change: 'filter-draft' };
       if (cardId) widget.uid = `${cardId}-${widget.path.replaceAll('.', '-')}`;
@@ -144,14 +147,14 @@ export function predicatesToFormData(predicates: readonly Predicate[], fields: r
       const predicate = matching[0];
       row.operator = predicate.operator;
       if (predicate.operator === 'in') row.values = predicate.value.map(String);
-      else if (predicate.operator !== 'isNull') row.value = predicate.value;
+      else if (predicate.operator !== 'isNull') row.value = pickerValue(predicate.value, field);
     } else if (matching.length > 1) {
       const lower = matching.find((predicate) => predicate.operator === '>=');
       const upper = matching.find((predicate) => predicate.operator === '<=');
-      if (matching.length !== 2 || !lower || !upper || !supportsRange(field) || !('value' in lower) || !('value' in upper)) {
+      if (matching.length !== 2 || lower?.operator !== '>=' || upper?.operator !== '<=' || !supportsRange(field)) {
         throw new Error(`The saved filters for ${field.title || field.name} cannot be represented by this form. Clear them or restore a single condition or inclusive range.`);
       }
-      row.operator = 'range'; row.minimum = lower.value; row.maximum = upper.value;
+      row.operator = 'range'; row.minimum = pickerValue(lower.value, field); row.maximum = pickerValue(upper.value, field);
     }
     data[`f${index}`] = row;
   });
@@ -159,6 +162,13 @@ export function predicatesToFormData(predicates: readonly Predicate[], fields: r
 }
 
 function isBlank(value: unknown) { return value === undefined || value === null || value === ''; }
+
+/** The existing picker uses wall time. Display UTC without rounding fractional seconds. */
+function pickerValue(value: Scalar, field: QueryableField): Scalar {
+  if (field.kind !== 'date-time' || field.schema?.enum || field.schema?.const !== undefined) return value;
+  validateFieldValue(field, value);
+  return new Date(value as string).toISOString().replace(/\.\d{3}Z$/, (value as string).match(/\.\d+/)?.[0] ?? '');
+}
 
 function readScalar(value: unknown, field: QueryableField, list = false): Scalar {
   const title = fieldLabel(field);
@@ -178,6 +188,12 @@ function readScalar(value: unknown, field: QueryableField, list = false): Scalar
     throw new Error(`Enter true or false for ${title}.`);
   }
   if (typeof value !== 'string') throw new Error(`Enter text for ${title}.`);
+  // Calendar edits are UTC; membership lists and saved API state require an explicit offset.
+  if (field.kind === 'date-time' && !list && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/.test(value)) {
+    const timestamp = `${value.length === 16 ? `${value}:00` : value}Z`;
+    validateFieldValue(field, timestamp);
+    return timestamp;
+  }
   if (field.kind === 'date') {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(Date.parse(`${value}T00:00:00Z`))
       || new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) !== value) {
@@ -204,7 +220,8 @@ export function formDataToPredicates(value: unknown, fields: readonly QueryableF
       const lower = isBlank(row.minimum) ? undefined : readScalar(row.minimum, field);
       const upper = isBlank(row.maximum) ? undefined : readScalar(row.maximum, field);
       if (lower === undefined && upper === undefined) throw new Error(`Enter at least one range bound for ${field.title || field.name}.`);
-      if (lower !== undefined && upper !== undefined && lower > upper) throw new Error(`The minimum for ${field.title || field.name} must not exceed its maximum.`);
+      const ordered = (value: Scalar) => field.kind === 'date-time' ? Date.parse(value as string) : value;
+      if (lower !== undefined && upper !== undefined && ordered(lower) > ordered(upper)) throw new Error(`The minimum for ${field.title || field.name} must not exceed its maximum.`);
       if (lower !== undefined) predicates.push({ field: field.name, operator: '>=', value: lower });
       if (upper !== undefined) predicates.push({ field: field.name, operator: '<=', value: upper });
       return;
