@@ -70,6 +70,11 @@ Releases with other tags skip both pipelines, and both versions are checked befo
 the test gates. Only stable `X.Y.Z` releases are supported; npm publishes them
 to `latest`.
 
+Bump both versions together with `task version:bump BUMP=patch` (or `minor`,
+`major`). It refuses to run if the two versions already differ, then updates
+`pyproject.toml`, `uv.lock`, the component `package.json` and
+`frontend/package-lock.json` without committing or tagging.
+
 The Python pipeline builds Django static assets from the checked-out frontend
 source before `uv build`; it does not fetch a published npm package. Its artifact
 checker validates the wheel and source distribution before publishing. The

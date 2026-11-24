@@ -129,6 +129,20 @@ tasks:
       - task: jupyter:build
       - uv build {{.CLI_ARGS}}
 
+  version:bump:
+    desc: Bump the Python and npm package versions together (BUMP=patch|minor|major)
+    requires:
+      vars:
+        - name: BUMP
+          enum: [patch, minor, major]
+    preconditions:
+      - sh: test "$(uv version --short)" = "$(node -p "require('./frontend/packages/components/package.json').version")"
+        msg: Python and npm versions differ; align them before bumping.
+    cmds:
+      - uv version --bump {{.BUMP}}
+      - cd frontend && npm version "$(uv version --short)" --workspace @microbiome-informatics/samplesift --no-git-tag-version
+      - echo "Bumped to $(uv version --short)"
+
   hooks:install:
     desc: Install the Git pre-commit hook
     cmds:

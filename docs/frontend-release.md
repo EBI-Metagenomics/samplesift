@@ -227,11 +227,9 @@ explicitly enabled, and check its static assets in a browser.
 
 For an established package with Trusted Publishing configured:
 
-1. Bump both versions together. From `frontend/`, run
-   `npm version 0.2.0 --workspace @samplesift/components --no-git-tag-version`;
-   from the repository root, run `uv version 0.2.0`. Commit the component
-   manifest, workspace lockfile, `pyproject.toml` and `uv.lock` after the checks
-   above pass.
+1. Bump both versions together with `task version:bump BUMP=minor` (or `patch`,
+   `major`) from the repository root. Commit the component manifest, workspace
+   lockfile, `pyproject.toml` and `uv.lock` after the checks above pass.
 2. Merge the approved changes, then publish a stable GitHub release tagged `v0.2.0`
    at that exact revision. This starts both the PyPI and npm publishers.
 3. Review both workflows' checks and approve the `pypi` and `npm` deployment
