@@ -1,4 +1,4 @@
-import type { CollectionMetadata, FieldKind, Operator, QueryableField, Scalar } from './types';
+import type { CollectionMetadata, CollectionRecordPresentation, FieldKind, Operator, QueryableField, Scalar } from './types';
 
 export const SUPPORTED_OPERATORS: readonly Operator[] = ['=', '<>', 'in', 'isNull', '>', '>=', '<', '<='];
 const ANNOTATIONS = new Set(['$schema', '$id', '$comment', 'title', 'description', 'default', 'examples', 'example', 'readOnly', 'writeOnly', 'deprecated']);
@@ -143,6 +143,17 @@ function nested(value: unknown, ...keys: string[]): unknown {
   return current;
 }
 
+function parseRecordPresentation(value: unknown, columns: string[], diagnostics: string[]): CollectionRecordPresentation | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) { diagnostics.push('Record presentation must be an object; record labels and links are unavailable.'); return undefined; }
+  const record: CollectionRecordPresentation = {};
+  if (typeof value.label === 'string' && columns.includes(value.label)) record.label = value.label;
+  else if (value.label !== undefined) diagnostics.push('Record label must name a result column; record IDs are shown instead.');
+  if (typeof value.url === 'string' && /^https?:\/\//i.test(value.url)) record.url = value.url;
+  else if (value.url !== undefined) diagnostics.push('Record URL must be an http(s) template; record links are unavailable.');
+  return Object.keys(record).length ? record : undefined;
+}
+
 /** Read queryables plus the exact collection QUERY operation's request/response models. */
 export function parseCollectionMetadata(
   queryables: unknown,
@@ -191,8 +202,9 @@ export function parseCollectionMetadata(
   }
   if (geometryFields.length > 1) throw new Error('Multiple geometry queryables are ambiguous; exactly one is supported.');
   const resultColumns = Object.entries(row.properties).map(([name, schema]) => ({ name, title: isRecord(schema) && typeof schema.title === 'string' ? schema.title : name }));
+  const record = parseRecordPresentation(row['x-samplesift-record'], Object.keys(row.properties), diagnostics);
   return {
     fields, ...(geometryFields[0] ? { geometryField: geometryFields[0] } : {}), sortValues, defaultLimit: limit.default as number, maxLimit: limit.maximum as number,
-    resultColumns, queryablesSchema: structuredClone(queryables), diagnostics,
+    resultColumns, ...(record ? { record } : {}), queryablesSchema: structuredClone(queryables), diagnostics,
   };
 }

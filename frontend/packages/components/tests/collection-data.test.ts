@@ -67,6 +67,19 @@ describe('collection metadata', () => {
     expect(model.diagnostics).toEqual([]);
   });
 
+  it('reads the declared record label and URL template from the result model', () => {
+    const document = openapi();
+    (document.components.schemas.Result as Record<string, unknown>)['x-samplesift-record'] = { label: 'name', url: 'https://obis.org/occurrence/{source_pk}' };
+    expect(parseCollectionMetadata(queryables(), document, { collection: 'occurrences' }).record)
+      .toEqual({ label: 'name', url: 'https://obis.org/occurrence/{source_pk}' });
+    expect(metadata().record).toBeUndefined();
+    (document.components.schemas.Result as Record<string, unknown>)['x-samplesift-record'] = { label: 'missing', url: 'javascript:{source_pk}' };
+    const invalid = parseCollectionMetadata(queryables(), document, { collection: 'occurrences' });
+    expect(invalid.record).toBeUndefined();
+    expect(invalid.diagnostics.join(' ')).toContain('Record label');
+    expect(invalid.diagnostics.join(' ')).toContain('Record URL');
+  });
+
   it('reports unsupported operators and constraints instead of silently enabling them', () => {
     const model = metadata(true, {
       name: field('string', ['=', 'like']),

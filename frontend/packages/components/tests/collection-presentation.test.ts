@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fieldLabel, summarizeCollectionFilters } from '../src/collection/presentation';
+import { fieldLabel, recordLabel, recordUrl, summarizeCollectionFilters } from '../src/collection/presentation';
 import type { Predicate, QueryableField } from '../src/collection/types';
 
 const fields: QueryableField[] = [
@@ -74,5 +74,26 @@ describe('collection filter presentation', () => {
     summarizeCollectionFilters(predicates, fields);
     expect({ predicates, fields }).toEqual(snapshot);
     expect(summarizeCollectionFilters([], fields)).toEqual([]);
+  });
+});
+
+describe('collection record presentation', () => {
+  const record = { label: 'accession', url: 'https://www.ebi.ac.uk/ena/browser/view/{accession}?pk={source_pk}' };
+
+  it('labels records with the declared field and falls back to the source key', () => {
+    expect(recordLabel({ source_pk: '7', accession: 'ERS1' }, record)).toBe('ERS1');
+    expect(recordLabel({ source_pk: '7', accession: null }, record)).toBe('7');
+    expect(recordLabel({ source_pk: '7', accession: 'ERS1' }, undefined)).toBe('7');
+  });
+
+  it('encodes placeholder values and omits links with missing values', () => {
+    expect(recordUrl({ source_pk: 'a/b c', accession: 'ERS1' }, record)).toBe('https://www.ebi.ac.uk/ena/browser/view/ERS1?pk=a%2Fb%20c');
+    expect(recordUrl({ source_pk: '7', accession: null }, record)).toBeUndefined();
+    expect(recordUrl({ source_pk: '7' }, undefined)).toBeUndefined();
+  });
+
+  it('rejects templates that do not produce an http(s) URL', () => {
+    expect(recordUrl({ source_pk: 'alert(1)' }, { url: 'javascript:{source_pk}' })).toBeUndefined();
+    expect(recordUrl({ source_pk: 'evil.example' }, { url: '{source_pk}' })).toBeUndefined();
   });
 });

@@ -8,7 +8,7 @@ import type {
   CollectionDataSource, CollectionItem, CollectionMetadata, CollectionOptions, CollectionResult,
   CollectionSearchState, Predicate,
 } from '../collection/types';
-import { fieldLabel, summarizeCollectionFilters } from '../collection/presentation';
+import { fieldLabel, recordLabel, recordUrl, summarizeCollectionFilters } from '../collection/presentation';
 import type { SampleSiftCollectionFilterForm } from './collection-filter-form';
 import type { CollectionTileSource } from '../collection/tiles';
 import type { SelectionChangeDetail } from '../types';
@@ -17,7 +17,7 @@ import { MAP_PARTS } from './selection-map';
 import { FILTER_PARTS } from './collection-filter-form';
 import { compactLayoutStyles, focusPanel, restorePanelFocus, reconcilePanelFocus, type ExplorerPanel } from './explorer-layout';
 
-export const COLLECTION_PARTS = `compact-toolbar, panel-toggle, panel-heading, panel-close, compact-summary, explorer, filter-panel, region-summary, results, results-heading, results-count, results-table, table-container, table-head, table-header-cell, table-body, table-row, table-cell, record-link, sort-control, pagination, page-button, applied-filters, filter-chip, feature-details, status, error, empty-state, ${MAP_PARTS}, ${FILTER_PARTS}`;
+export const COLLECTION_PARTS = `compact-toolbar, panel-toggle, panel-heading, panel-close, compact-summary, explorer, filter-panel, region-summary, results, results-heading, results-count, results-table, table-container, table-head, table-header-cell, table-body, table-row, table-cell, record-link, record-url, sort-control, pagination, page-button, applied-filters, filter-chip, feature-details, status, error, empty-state, ${MAP_PARTS}, ${FILTER_PARTS}`;
 
 /** Collection API coordinator. It never reads or writes the host's URL or history. */
 export class SampleSiftCollection extends LitElement {
@@ -256,6 +256,11 @@ export class SampleSiftCollection extends LitElement {
     return String(value);
   }
 
+  private renderRecordUrl(item: Record<string, unknown>, metadata: CollectionMetadata) {
+    const url = recordUrl(item, metadata.record);
+    return url ? html`<a part="record-url" class="record-url" href=${url} target="_blank" rel="noopener noreferrer">Open record</a>` : nothing;
+  }
+
   render() {
     const compact = this.layout !== 'full';
     const metadata = this._metadata;
@@ -301,7 +306,7 @@ export class SampleSiftCollection extends LitElement {
           .mapStyle=${this.mapStyle} .mapLayers=${this.mapLayers} .mapLayerState=${this.mapLayerState}
           @layerpanelchange=${this.onLayerPanelChange} @maplayerchange=${this.onMapLayerChange} @selectionchange=${this.onSelection} @featureclick=${this.onFeature}></sample-sift-map>
         <div class="caption">${this.options?.tiles ? 'The map shows all matching locations. Cluster labels count records; zoom in to explore.' : this.showTable ? 'No vector-tile layer configured. Records are available in the table.' : 'No collection map tiles configured.'}</div>
-        ${this._activeFeature ? html`<details part="feature-details" class="feature" open><summary>Selected record</summary><button aria-label="Close record details" @click=${() => { this._activeFeature = undefined; }}>Close</button><dl>${Object.entries(this._activeFeature).filter(([key]) => !['geometry', 'cluster', 'cluster_id', 'point_count'].includes(key)).map(([key, value]) => html`<dt>${key}</dt><dd>${this.format(value)}</dd>`)}</dl></details>` : nothing}
+        ${this._activeFeature ? html`<details part="feature-details" class="feature" open><summary>Selected record: <strong data-record-label>${recordLabel(this._activeFeature, metadata.record)}</strong></summary>${this.renderRecordUrl(this._activeFeature, metadata)}<dl>${Object.entries(this._activeFeature).filter(([key]) => !['source_pk', 'geometry', 'cluster', 'cluster_id', 'point_count'].includes(key)).map(([key, value]) => html`<dt>${key}</dt><dd>${this.format(value)}</dd>`)}</dl></details>` : nothing}
         <section part="results" class="results" id="collection-results-panel" data-panel="results" tabindex="-1" aria-label="Collection results" aria-busy=${this._loading} ?hidden=${compact && (!this.showTable || this._panel !== 'results')}>
           <div class="panel-heading" part="panel-heading" ?hidden=${!compact}><h2 data-panel-heading tabindex="-1">Results</h2><button type="button" part="panel-close" aria-label="Close results" @click=${() => this.closePanel()}>Close</button></div>
           <div part="results-heading" class="heading"><div><div class="kicker">MATCHING RECORDS</div><div class="count-line"><h3 part="results-count" data-testid=${!compact ? 'collection-count' : nothing} aria-live="polite">${count}</h3>
@@ -321,7 +326,7 @@ export class SampleSiftCollection extends LitElement {
             ${this.state.selection ? html`<button @click=${this.clearRegion}>Clear selected region</button>` : nothing}
           </div></div>` : nothing}
           ${this.showTable && items.length && !this.paused ? html`<div part="table-container" class="table-wrap"><table part="results-table" data-testid="collection-results"><thead part="table-head"><tr>${columns.map(column => html`<th part="table-header-cell" scope="col">${column.title}</th>`)}</tr></thead><tbody part="table-body">
-            ${items.map(item => html`<tr part="table-row" data-record-id=${item.source_pk} class=${this._activeFeature?.source_pk === item.source_pk ? 'selected' : ''}>${columns.map(column => html`<td part="table-cell">${column.name === 'source_pk' ? html`<button part="record-link" class="record-id" @click=${() => this.choose(item)}>${item.source_pk}</button>` : html`<span title=${this.format(item[column.name])}>${this.format(item[column.name])}</span>`}</td>`)}</tr>`)}
+            ${items.map(item => html`<tr part="table-row" data-record-id=${item.source_pk} class=${this._activeFeature?.source_pk === item.source_pk ? 'selected' : ''}>${columns.map(column => html`<td part="table-cell">${column.name === 'source_pk' ? html`<button part="record-link" class="record-id" @click=${() => this.choose(item)}>${recordLabel(item, metadata.record)}</button>` : html`<span title=${this.format(item[column.name])}>${this.format(item[column.name])}</span>`}</td>`)}</tr>`)}
           </tbody></table></div>` : nothing}
           ${this.showTable ? html`<div part="pagination" class="pagination"><span>${items.length ? `${pageOffset + 1}–${pageOffset + items.length}${total === undefined ? '' : ` of ${total.toLocaleString()}`}` : 'No rows to display'}</span>
             <div><button part="page-button" aria-label="Previous collection page" ?disabled=${disabled || !pageOffset} @click=${() => this.page(-1)}>← Previous</button><button part="page-button" aria-label="Next collection page" ?disabled=${nextDisabled} @click=${() => this.page(1)}>Next →</button></div>
@@ -350,7 +355,7 @@ export class SampleSiftCollection extends LitElement {
     .table-wrap{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:11px;text-align:left}th{white-space:nowrap;text-transform:uppercase;letter-spacing:.06em;font-size:9px;color:var(--samplesift-muted, #718269);background:var(--samplesift-surface-muted, #f8faf6);padding:11px 14px;border-block:1px solid var(--samplesift-border-color, #e1e7dc)}td{padding:11px 14px;border-bottom:1px solid var(--samplesift-border-color, #e9eee5);max-width:220px;overflow-wrap:anywhere}td span{display:block;max-width:200px;max-height:6em;overflow:auto}.record-id{border:0;padding:0;font-size:10px;background:transparent;text-align:left;overflow-wrap:anywhere;min-width:130px}.selected{background:var(--samplesift-surface-muted, #edf5e9)}
     .pagination{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;gap:12px;font-size:11px;color:var(--samplesift-muted, #73836d)}.pagination>div{display:flex;gap:7px}.pagination button{font-size:11px}
     .notice{font-size:11px;color:var(--samplesift-warning-color, #806235);background:var(--samplesift-warning-background, #fff8e9);padding:10px 13px;margin:12px 0}.results>.notice{margin:0 20px 15px}.error{color:var(--samplesift-error-color, #963f28);background:var(--samplesift-error-background, #fff5ef);padding:18px}.error button{display:block;margin-top:10px}.empty{padding:28px;text-align:center;color:var(--samplesift-muted, #73836d)}
-    .feature{padding:12px 20px;border-bottom:1px solid var(--samplesift-border-color, #dbe2da);background:var(--samplesift-surface-muted, #f4f8f0)}.feature summary{cursor:pointer;color:var(--samplesift-accent, #295d49)}.feature dl{display:grid;grid-template-columns:minmax(90px,auto) 1fr;gap:5px 14px;font-size:11px}.feature dt{font-weight:600}.feature dd{margin:0;overflow-wrap:anywhere}
+    .feature{padding:12px 20px;border-bottom:1px solid var(--samplesift-border-color, #dbe2da);background:var(--samplesift-surface-muted, #f4f8f0)}.feature summary{cursor:pointer;color:var(--samplesift-accent, #295d49)}.feature .record-url{display:inline-block;margin:8px 10px 0 0;color:var(--samplesift-accent, #295d49)}.feature dl{display:grid;grid-template-columns:minmax(90px,auto) 1fr;gap:5px 14px;font-size:11px}.feature dt{font-weight:600}.feature dd{margin:0;overflow-wrap:anywhere}
     .setup{padding:35px;border:1px solid var(--samplesift-border-color, #dbe2da);border-radius:var(--samplesift-radius, 12px);background:var(--samplesift-surface-muted, #f8faf6)}.setup [role=alert]{color:var(--samplesift-error-color, #963f28)}
     @media(max-width:760px){.explorer{grid-template-columns:1fr}.filters{border-right:0;border-bottom:1px solid var(--samplesift-border-color, #e1e7dc)}.heading{padding:17px;flex-wrap:wrap}sample-sift-map{height:var(--samplesift-map-height, 360px)}.pagination{padding:13px;flex-wrap:wrap}}
     .compact-setup{height:var(--samplesift-compact-height, 480px);min-height:360px}

@@ -68,7 +68,7 @@ Use `sample-sift::part(name)` to style a documented part. The collection and map
 | Collection layout | `explorer`, `filter-panel`, `region-summary`, `results`, `results-heading`, `results-count` |
 | Collection filters | `filter-form`, `filter-heading`, `filter-title`, `filter-card`, `filter-label`, `filter-condition`, `filter-remove`, `filter-fields`, `filter-add`, `filter-picker`, `filter-search`, `filter-option`, `filter-actions` |
 | Filter actions and feedback | `apply-button`, `discard-button`, `clear-button`, `filter-status`, `filter-error` |
-| Applied filters and records | `applied-filters`, `filter-chip`, `feature-details`, `record-link`, `sort-control` |
+| Applied filters and records | `applied-filters`, `filter-chip`, `feature-details`, `record-link`, `record-url`, `sort-control` |
 | Results table | `table-container`, `results-table`, `table-head`, `table-header-cell`, `table-body`, `table-row`, `table-cell` |
 | Paging and result feedback | `pagination`, `page-button`, `status`, `error`, `empty-state` |
 | Map and drawing controls | `map`, `map-surface`, `map-toolbar`, `map-button` |

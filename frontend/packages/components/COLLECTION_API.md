@@ -143,6 +143,16 @@ The 512-pixel calculation requires the backend radius correction from commit `55
 
 Clusters render as larger circles with count labels; clicking one zooms toward it without pretending it is an individual record. Clicking a singleton emits `featureclick` directly from its tile properties, even when that record is not on the current table page. The pinned MapLibre version can render the count labels using local `sans-serif` glyphs when the style has no glyphs URL; the default raster/background-only styles need no remote font endpoint.
 
+### Record labels and links
+
+The OpenAPI item schema can declare `x-samplesift-record` with an optional `label` (a result column name) and `url` (an absolute `http(s)` template with `{field}` placeholders):
+
+```json
+{"x-samplesift-record": {"label": "accession", "url": "https://www.ebi.ac.uk/ena/browser/view/{accession}"}}
+```
+
+The table's record button and the **Selected record** panel show the label field's value, falling back to `source_pk` when the label is undeclared or empty. The panel heading is the only place `source_pk` appears; it is not repeated in the panel's property list. When `url` is declared, the panel shows an **Open record** link (`record-url` part) that opens in a new tab. Placeholder values come from the clicked tile feature or table row and are URL-encoded. The link is omitted if any placeholder value is missing or the filled template is not an `http(s)` URL. An invalid declaration adds a capability diagnostic and is ignored. The `featureclick` event detail is unchanged.
+
 `items` are validated as records with a nonempty string `source_pk` and a GeoJSON Point or `null` geometry. Columns are derived from the OpenAPI item schema. `total` is optional: when absent, the UI identifies the number of records on the current page rather than inventing a total. There is no collection facet-count endpoint or facet UI in this contract.
 
 ## Map display preferences

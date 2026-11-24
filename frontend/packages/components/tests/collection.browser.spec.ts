@@ -46,11 +46,11 @@ function matches(item: (typeof rows)[number], expression?: CqlExpression): boole
     default: throw new Error(`Unhandled fixture operator: ${op}`);
   }
 }
-async function mockApi(page: Page, cap?: number) {
+async function mockApi(page: Page, cap?: number, document: unknown = openapi) {
   const queries: CollectionQuery[] = [], tiles: CollectionQuery[] = [];
   await page.route(/\/samplesift\/(?:openapi\.json|collections\/)/, async route => {
     const request = route.request(), path = new URL(request.url()).pathname;
-    if (path.endsWith('/openapi.json')) return route.fulfill({ json: openapi });
+    if (path.endsWith('/openapi.json')) return route.fulfill({ json: document });
     if (path.endsWith('/queryables')) return route.fulfill({ json: queryables });
     expect(request.method()).toBe('QUERY');
     const query = request.postDataJSON() as CollectionQuery;
@@ -74,8 +74,8 @@ async function mockApi(page: Page, cap?: number) {
   });
   return { queries, tiles };
 }
-async function open(page: Page, cap?: number, mode: 'auto' | 'manual' = 'manual') {
-  const calls = await mockApi(page, cap);
+async function open(page: Page, cap?: number, mode: 'auto' | 'manual' = 'manual', document: unknown = openapi) {
+  const calls = await mockApi(page, cap, document);
   await page.goto('/demo/collection.html?tab=results&tag=a&tag=b#/host');
   const first = page.locator('#first'), second = page.locator('#second');
   await expect(first.getByTestId('collection-count')).toHaveText('6 records');
@@ -145,6 +145,25 @@ test('generated filters and tiles share CQL2 while paging and routing remain ind
   expect(tiles.filter(query => query.filter).length).toBe(filteredTileCalls);
   expect(await page.evaluate(() => (window as unknown as { collectionEvents: unknown[] }).collectionEvents.length)).toBe(1);
   expect(await page.evaluate(() => ({ href: location.href, length: history.length, state: history.state }))).toEqual(before);
+});
+
+test('selected records show the declared label and record link', async ({ page }) => {
+  const document = structuredClone(openapi);
+  const result = document.paths['/samplesift/collections/occurrences/results'].query.responses[200].content['application/json'].schema.properties.items.items as Record<string, unknown>;
+  result['x-samplesift-record'] = { label: 'name', url: 'https://example.org/records/{source_pk}?name={name}' };
+  const { first } = await open(page, undefined, 'manual', document);
+  const record = first.locator('[part="record-link"]').first();
+  await expect(record).toHaveText('Record 0');
+  await record.click();
+  const details = first.locator('[part="feature-details"]');
+  await expect(details.locator('summary')).toHaveText('Selected record: Record 0');
+  const link = details.getByRole('link', { name: 'Open record' });
+  await expect(link).toHaveAttribute('href', 'https://example.org/records/A?name=Record%200');
+  await expect(link).toHaveAttribute('target', '_blank');
+  await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  await expect(details.locator('dt')).not.toContainText(['source_pk']);
+  await expect(details.locator('dt', { hasText: 'name' })).toHaveCount(1);
+  await expect(details.getByRole('button')).toHaveCount(0);
 });
 
 test('new metadata fields appear automatically and invalid drafts never query', async ({ page }) => {

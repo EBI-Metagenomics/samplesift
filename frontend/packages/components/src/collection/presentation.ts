@@ -1,4 +1,4 @@
-import type { Predicate, QueryableField, Scalar } from './types';
+import type { CollectionRecordPresentation, Predicate, QueryableField, Scalar } from './types';
 
 /** Prefer the collection's own title; infer a readable label only when absent. */
 export function fieldLabel(field: { name: string; title?: string }): string {
@@ -51,4 +51,26 @@ export function summarizeCollectionFilters(
       : `${label} ${conditions.map(predicate => conditionSummary(predicate, field)).join(' and ')}`;
     return { field: name, label, summary };
   });
+}
+
+/** The record's declared label, falling back to its source key. */
+export function recordLabel(item: Record<string, unknown>, record: CollectionRecordPresentation | undefined): string {
+  const value = record?.label ? item[record.label] : undefined;
+  return value === null || value === undefined || value === '' ? String(item.source_pk ?? '') : String(value);
+}
+
+/** Fill a record URL template; missing values or non-http(s) results produce no link. */
+export function recordUrl(item: Record<string, unknown>, record: CollectionRecordPresentation | undefined): string | undefined {
+  if (!record?.url) return undefined;
+  let missing = false;
+  const filled = record.url.replace(/\{([^{}]+)\}/g, (_, name: string) => {
+    const value = item[name];
+    if (value === null || value === undefined || value === '') { missing = true; return ''; }
+    return encodeURIComponent(String(value));
+  });
+  if (missing) return undefined;
+  try {
+    const url = new URL(filled);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : undefined;
+  } catch { return undefined; }
 }
