@@ -13,7 +13,7 @@ WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY src ./src
 COPY --from=frontend /app/src/samplesift/django/static ./src/samplesift/django/static
-RUN pip install --no-cache-dir '.[django]' 'psycopg[binary]>=3.2,<4' 'redis>=5,<7'
+RUN pip install --no-cache-dir '.[django]' 'psycopg[binary]>=3.2,<4' 'redis>=5,<7' 'django-cors-headers>=4.9,<5'
 COPY examples/obis ./examples/obis
 WORKDIR /app/examples/obis
 EXPOSE 8000

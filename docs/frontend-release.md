@@ -124,6 +124,7 @@ npm test
 npm run lint
 npm run build
 npm run build:django
+npm run build:jupyter
 PLAYWRIGHT_CHANNEL=chrome npm run test:browser
 npm run check:package --workspace @microbiome-informatics/samplesift
 ```

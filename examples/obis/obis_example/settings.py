@@ -2,15 +2,24 @@ import os
 
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "local-obis-example-only")
 DEBUG = True
-ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,[::1]").split(",")
+ALLOWED_HOSTS = os.environ.get(
+    "DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,[::1]"
+).split(",")
 INSTALLED_APPS = [
+    "corsheaders",
     "django.contrib.contenttypes",
     "django.contrib.postgres",
     "django.contrib.staticfiles",
     "samplesift.django.apps.SamplesiftDjangoConfig",
     "occurrences",
 ]
-TEMPLATES = [{"BACKEND": "django.template.backends.django.DjangoTemplates", "APP_DIRS": True}]
+TEMPLATES = [
+    {"BACKEND": "django.template.backends.django.DjangoTemplates", "APP_DIRS": True}
+]
+MIDDLEWARE = ["corsheaders.middleware.CorsMiddleware"]
+CORS_ALLOWED_ORIGIN_REGEXES = [r"^https?://(localhost|127\.0\.0\.1|\[::1\])(:[0-9]+)?$"]
+CORS_URLS_REGEX = r"^/samplesift/"
+CORS_ALLOW_METHODS = ["GET", "HEAD", "QUERY", "OPTIONS"]
 ROOT_URLCONF = "obis_example.urls"
 STATIC_URL = "static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

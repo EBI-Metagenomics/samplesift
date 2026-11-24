@@ -35,6 +35,7 @@ dev = [
   "psycopg[binary]>=3.2,<4",
   "Django>=5.0,<7",
   "django-ninja>=1.5,<2",
+  "django-cors-headers>=4.9,<5",
 ]
 
 [tool.pytest.ini_options]
