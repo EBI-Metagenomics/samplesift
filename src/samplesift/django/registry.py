@@ -40,6 +40,9 @@ class CollectionRegistry:
         collection.source_model()
         collection.source_database()
         collection.collection_fields()
+        collection.record_label()
+        collection.record_url()
+        collection.excluded_queryables()
         table_name = collection.table_name()
         if table_name in self._table_names:
             raise ValueError(

@@ -107,9 +107,10 @@ def _public_fields(collection: type[SampleSiftCollection]) -> dict[str, models.F
 
 def _queryables(collection: type[SampleSiftCollection]) -> dict[str, tuple[Queryable, str]]:
     overrides = getattr(getattr(collection, "Query", None), "queryables", {})
-    fields = _public_fields(collection)
+    excluded = set(collection.excluded_queryables())
+    fields = {name: field for name, field in _public_fields(collection).items() if name not in excluded}
     if not isinstance(overrides, dict) or set(overrides) - set(fields):
-        raise ValueError("Query.queryables must map materialized field names to overrides.")
+        raise ValueError("Query.queryables must map queryable materialized field names to overrides.")
     result = {}
     for field_name, field in fields.items():
         override = overrides.get(field_name, {})
@@ -310,6 +311,9 @@ class SamplesiftAPI(NinjaAPI):
                     **{field_name: _field_schema(field) for field_name, field in fields.items()},
                 },
             }
+            record = {"label": collection.record_label(), "url": collection.record_url()}
+            if record := {key: value for key, value in record.items() if value is not None}:
+                components[result_name]["x-samplesift-record"] = record
             operation = next(
                 (
                     item.get("query")

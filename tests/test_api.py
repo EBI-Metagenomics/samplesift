@@ -204,3 +204,55 @@ def test_cluster_radius_uses_512_pixel_vector_tiles() -> None:
     equator = 2 * math.pi * 6378137
     assert math.isclose(WEB_MERCATOR_INITIAL_RESOLUTION * VECTOR_TILE_SIZE, equator)
     assert VECTOR_TILE_SIZE == 512
+
+
+def test_excluded_queryables_stay_in_results_and_sorting() -> None:
+    from ninja.errors import HttpError
+
+    from samplesift.django.api import _apply_filters, _ordering
+
+    class ExcludedCollection(ApiSampleCollection):
+        class Meta(ApiSampleCollection.Meta):
+            record_label = "label"
+
+        class Query(ApiSampleCollection.Query):
+            exclude_queryables: ClassVar[list[str]] = ["label"]
+
+    assert set(_queryables(ExcludedCollection)) == {"score"}
+    assert _ordering(ExcludedCollection, {"sort": ["label"]}) == ["label", "source_pk"]
+    with pytest.raises(HttpError, match="Unknown queryable"):
+        _apply_filters(
+            ApiSample.objects.none(), ExcludedCollection,
+            {"filter": {"op": "=", "args": [{"property": "label"}, "a"]}},
+        )
+
+
+def test_record_label_does_not_exclude_queryables() -> None:
+    class LabelledCollection(ApiSampleCollection):
+        class Meta(ApiSampleCollection.Meta):
+            record_label = "label"
+            record_url = "https://example.org/samples/{label}"
+
+    assert set(_queryables(LabelledCollection)) == {"label", "score"}
+
+
+def test_queryable_override_rejects_excluded_field() -> None:
+    class OverriddenCollection(ApiSampleCollection):
+        class Query(ApiSampleCollection.Query):
+            exclude_queryables: ClassVar[list[str]] = ["score"]
+            queryables: ClassVar[dict] = {"score": {"name": "rating"}}
+
+    with pytest.raises(ValueError, match="Query.queryables"):
+        _queryables(OverriddenCollection)
+
+
+def test_openapi_result_schema_describes_record_presentation(monkeypatch) -> None:
+    monkeypatch.setattr(ApiSampleCollection.Meta, "record_label", "label", raising=False)
+    monkeypatch.setattr(ApiSampleCollection.Meta, "record_url", "https://example.org/{source_pk}", raising=False)
+    schema = api.get_openapi_schema(path_prefix="/samplesift")
+    assert schema["components"]["schemas"]["ApiSamplesResult"]["x-samplesift-record"] == {
+        "label": "label", "url": "https://example.org/{source_pk}",
+    }
+    monkeypatch.delattr(ApiSampleCollection.Meta, "record_url")
+    schema = api.get_openapi_schema(path_prefix="/samplesift")
+    assert schema["components"]["schemas"]["ApiSamplesResult"]["x-samplesift-record"] == {"label": "label"}

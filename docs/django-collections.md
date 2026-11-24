@@ -383,6 +383,20 @@ class Query:
     }
 ```
 
+Hide a materialized field from filtering with `Query.exclude_queryables`:
+
+```python
+class Query:
+    default_ordering = ["-temperature"]
+    exclude_queryables = ["accession"]
+```
+
+Excluded fields are omitted from the discovery schema and rejected in filters
+with a 422 error. They remain in results and tiles and can still be used for
+sorting. Each name must be a materialized field; `Query.queryables` cannot
+override an excluded field. Nothing is excluded implicitly, including the fields
+named by `record_label` or `record_url`.
+
 Overrides use materialized field names as keys; public names are used in filters.
 Sorting and returned fields retain materialized field names. The discovery schema
 describes types and capabilities, not observed data ranges. This is a SampleSift
@@ -411,6 +425,35 @@ URL shape.
 Swagger UI's internal schema is adapted to display `QUERY`
 operations; requests still use `QUERY` and the published OpenAPI schema remains
 unchanged. Generated curl commands and their copy button also use `QUERY`.
+
+### Record label and link
+
+By default the map's record details and the results table identify a record by
+its `source_pk`. Declare a readable label and a link to the record on `Meta`:
+
+```python
+class SampleCollection(SampleSiftCollection):
+    fields = ["accession", "lat", "lon", "temperature"]
+    geometry = Point(longitude="lon", latitude="lat")
+
+    class Meta:
+        model = Sample
+        record_label = "accession"
+        record_url = "https://www.ebi.ac.uk/ena/browser/view/{accession}"
+```
+
+- `record_label` names one materialized field or `source_pk`.
+- `record_url` is an absolute `http://` or `https://` template. It needs at least
+  one `{name}` placeholder, and each must name a materialized field or `source_pk`.
+  Format specifications and conversions such as `{lat:.2f}` or `{lat!r}` are rejected.
+
+Both are optional and validated at registration. They are published on the
+collection's OpenAPI result schema as `x-samplesift-record`. The browser fills in
+the placeholders from the clicked record's properties and URL-encodes the values.
+Nothing extra is stored in the collection table or tiles, so changing them needs
+only a restart, not `samplesift_sync_schema`. Use a `Property` to compute a
+placeholder value that the source model does not hold directly. Label and URL
+fields remain queryable unless listed in `Query.exclude_queryables`.
 
 Spatial collection indexes use Django's PostgreSQL `GistIndex`; creating and
 registering a spatial collection therefore requires Django's PostgreSQL support

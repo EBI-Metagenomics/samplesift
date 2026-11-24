@@ -139,3 +139,38 @@ def test_rolled_back_source_write_is_not_materialised(target_alias: str) -> None
     assert not registry.get_model(SampleCollection).objects.using(target_alias).filter(
         source_pk=source_pk
     ).exists()
+
+
+@pytest.mark.parametrize(
+    ("meta", "query", "message"),
+    [
+        ({"record_label": "missing"}, {}, "Meta.record_label"),
+        ({"record_url": "/samples/{source_pk}"}, {}, "Meta.record_url"),
+        ({"record_url": "javascript:alert({source_pk})"}, {}, "Meta.record_url"),
+        ({"record_url": "https://example.org/samples"}, {}, "Meta.record_url"),
+        ({"record_url": "https://example.org/{missing}"}, {}, "Meta.record_url"),
+        ({"record_url": "https://example.org/{lat:.2f}"}, {}, "Meta.record_url"),
+        ({"record_url": "https://example.org/{source_pk"}, {}, "Meta.record_url"),
+        ({}, {"exclude_queryables": ["missing"]}, "Query.exclude_queryables"),
+        ({}, {"exclude_queryables": "lat"}, "Query.exclude_queryables"),
+    ],
+)
+def test_collection_registry_rejects_invalid_record_presentation(meta, query, message) -> None:
+    meta_class = type("Meta", (), {"model": Sample, "table_name": "samplesift_record_test", **meta})
+    query_class = type("Query", (), query)
+    collection = type(
+        "RecordCollection", (SampleSiftCollection,),
+        {"fields": ["lat", "species_name"], "Meta": meta_class, "Query": query_class},
+    )
+    with pytest.raises(ValueError, match=message):
+        CollectionRegistry().register(collection)
+
+
+def test_record_url_fields_accept_fields_and_source_pk() -> None:
+    class RecordCollection(SampleCollection):
+        class Meta(SampleCollection.Meta):
+            record_label = "species_name"
+            record_url = "https://example.org/{species_name}/{source_pk}"
+
+    assert RecordCollection.record_label() == "species_name"
+    assert RecordCollection.record_url_fields() == ["species_name", "source_pk"]
