@@ -88,9 +88,10 @@ exactly. Renaming the workflow file requires updating the publisher on PyPI.
 
 ## Cutting a release
 
-1. Choose the backend and bundled frontend changes to include. Bump only the
-   affected package versions; a Python-only change does not require an npm bump.
-2. Bump `version` in `pyproject.toml`, run `uv lock`, and merge the approved change.
+1. Choose the backend and bundled frontend changes to include. Python and npm
+   share one version, so every release bumps both.
+2. Run `task version:bump BUMP=patch` (or `minor`, `major`) and merge the
+   approved change.
 3. Create a GitHub release from the intended revision on `main` with the exact
    tag `v<python-version>`. Publishing that GitHub release starts the pipeline.
 4. Review the checks and approve the `pypi` deployment if reviewers are required.
