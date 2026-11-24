@@ -26,9 +26,13 @@ export interface CollectionMetadata {
   defaultLimit: number;
   maxLimit: number;
   resultColumns: Array<{ name: string; title: string }>;
+  /** Result field used as a record's readable label, and an http(s) URL template with {field} placeholders. */
+  record?: CollectionRecordPresentation;
   queryablesSchema: Record<string, unknown>;
   diagnostics: string[];
 }
+
+export interface CollectionRecordPresentation { label?: string; url?: string }
 
 export interface CollectionSearchState {
   predicates: Predicate[];

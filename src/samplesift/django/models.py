@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import string
 from typing import Any, ClassVar
 
 from django.db import models
@@ -147,6 +148,64 @@ class SampleSiftCollection:
                     f"{cls.__name__}.Query.default_ordering includes unknown field {name!r}."
                 )
         return ordering
+
+    @classmethod
+    def _record_names(cls) -> set[str]:
+        return {"source_pk", *(name for name in cls.collection_fields() if name != "geometry")}
+
+    @classmethod
+    def record_label(cls) -> str | None:
+        meta = getattr(cls, "Meta", None)
+        label = getattr(meta, "record_label", None)
+        if label is not None and (not isinstance(label, str) or label not in cls._record_names()):
+            raise CollectionDefinitionError(
+                f"{cls.__name__}.Meta.record_label must name a collection field or source_pk."
+            )
+        return label
+
+    @classmethod
+    def record_url(cls) -> str | None:
+        meta = getattr(cls, "Meta", None)
+        template = getattr(meta, "record_url", None)
+        if template is not None:
+            cls._record_url_fields(template)
+        return template
+
+    @classmethod
+    def record_url_fields(cls) -> list[str]:
+        template = cls.record_url()
+        return [] if template is None else cls._record_url_fields(template)
+
+    @classmethod
+    def _record_url_fields(cls, template: Any) -> list[str]:
+        error = CollectionDefinitionError(
+            f"{cls.__name__}.Meta.record_url must be an absolute http(s) URL template "
+            "with {field} placeholders naming collection fields or source_pk."
+        )
+        if not isinstance(template, str) or not re.match(r"https?://[^/{}]", template):
+            raise error
+        try:
+            parsed = list(string.Formatter().parse(template))
+        except ValueError as parse_error:
+            raise error from parse_error
+        names = [name for _, name, spec, conversion in parsed if name is not None and not spec and conversion is None]
+        placeholders = [name for _, name, _, _ in parsed if name is not None]
+        if not names or names != placeholders or not set(names) <= cls._record_names():
+            raise error
+        return names
+
+    @classmethod
+    def excluded_queryables(cls) -> list[str]:
+        query = getattr(cls, "Query", None)
+        excluded = getattr(query, "exclude_queryables", [])
+        fields = cls._record_names() - {"source_pk"}
+        if not isinstance(excluded, (list, tuple)) or not all(
+            isinstance(name, str) and name in fields for name in excluded
+        ):
+            raise CollectionDefinitionError(
+                f"{cls.__name__}.Query.exclude_queryables must list collection field names."
+            )
+        return list(excluded)
 
     @classmethod
     def geometry_field(cls) -> models.Field[Any, Any]:
