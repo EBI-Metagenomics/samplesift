@@ -13,6 +13,7 @@ class OccurrenceCollection(SampleSiftCollection):
     class Meta:
         model = Occurrence
         api_name = "occurrences"
+        record_url = "https://obis.org/occurrence/{source_pk}"
 
     class Query:
         default_ordering: ClassVar[list[str]] = ["date"]
